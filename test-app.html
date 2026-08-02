@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prueba Push</title>
+<link rel="manifest" href="test-app-manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Prueba Push">
+</head>
+<body style="font-family:sans-serif;padding:20px;background:#111;color:#fff;">
+<h1 style="font-size:22px;">🔔 Prueba de Push</h1>
+<p id="estado">Cargando...</p>
+
+<button id="btn-sub" style="font-size:18px;padding:14px 20px;width:100%;margin-bottom:10px;">1. Suscribirme</button>
+<button id="btn-enviar" style="font-size:18px;padding:14px 20px;width:100%;background:#0A84FF;color:#fff;border:none;border-radius:10px;" disabled>2. Enviarme un push de prueba</button>
+
+<pre id="log" style="background:#222;padding:10px;white-space:pre-wrap;font-size:11px;margin-top:14px;min-height:150px;border-radius:8px;"></pre>
+
+<script>
+var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
+var VAPID_PUBLIC_KEY = 'BDGim65cFURiinn9YBihEuRJH-6Oefv3Kj-jn-ZFD6oH0AF1z11Ztj_HMqkmc3xMmRAkptlnrTxCZlH9CRKUQtk';
+var suscripcionActual = null;
+
+function log(msg){
+  var el = document.getElementById('log');
+  el.textContent += (new Date()).toLocaleTimeString() + ' — ' + msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function urlBase64ToUint8Array(base64String){
+  var padding = '='.repeat((4 - base64String.length % 4) % 4);
+  var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  var rawData = atob(base64);
+  var outputArray = new Uint8Array(rawData.length);
+  for(var i = 0; i < rawData.length; ++i){ outputArray[i] = rawData.charCodeAt(i); }
+  return outputArray;
+}
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('test-app-sw.js').then(function(){
+    document.getElementById('estado').textContent = 'Listo. Pulsa el botón 1.';
+    log('Service worker registrado OK');
+  }).catch(function(err){
+    document.getElementById('estado').textContent = 'Error registrando SW: ' + err.message;
+    log('❌ ' + err.message);
+  });
+} else {
+  document.getElementById('estado').textContent = 'Este navegador no soporta service workers';
+}
+
+document.getElementById('btn-sub').addEventListener('click', async function(){
+  try{
+    log('Pidiendo permiso...');
+    var permiso = await Notification.requestPermission();
+    log('Permiso: ' + permiso);
+    if(permiso !== 'granted'){ return; }
+    var reg = await navigator.serviceWorker.ready;
+    var existente = await reg.pushManager.getSubscription();
+    if(existente){ await existente.unsubscribe(); log('Suscripción antigua cancelada'); }
+    var sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    suscripcionActual = sub.toJSON();
+    log('✅ Suscrito. Endpoint: ' + suscripcionActual.endpoint.slice(0, 70) + '...');
+    document.getElementById('estado').textContent = 'Suscrito. Pulsa el botón 2 para probar.';
+    document.getElementById('btn-enviar').disabled = false;
+  }catch(err){
+    log('❌ ERROR: ' + err.message);
+    document.getElementById('estado').textContent = 'Error: ' + err.message;
+  }
+});
+
+document.getElementById('btn-enviar').addEventListener('click', async function(){
+  if(!suscripcionActual){ log('❌ Todavía no hay suscripción'); return; }
+  try{
+    log('Enviando petición al servidor...');
+    var res = await fetch(SUPABASE_URL + '/functions/v1/test-send-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: suscripcionActual,
+        title: '🎉 ¡Funciona!',
+        body: 'Este push llegó correctamente a las ' + new Date().toLocaleTimeString()
+      })
+    });
+    var data = await res.json();
+    log('Respuesta del servidor (status ' + res.status + '): ' + JSON.stringify(data));
+    document.getElementById('estado').textContent = 'Petición enviada. Espera el aviso (cierra esta pestaña si hace falta).';
+  }catch(err){
+    log('❌ ERROR: ' + err.message);
+  }
+});
+</script>
+</body>
+</html>

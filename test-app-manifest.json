@@ -1,0 +1,10 @@
+{
+  "name": "Prueba Push",
+  "short_name": "Prueba Push",
+  "start_url": "./test-app.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": []
+}

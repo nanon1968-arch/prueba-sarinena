@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Brigada de Sariñena</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Brigada">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    /* Estilo iOS (modo oscuro nativo de Apple) */
+    --bg:#000000; --surface:#1C1C1E; --surface-alt:#2C2C2E;
+    --ink:#FFFFFF; --ink-soft:#8E8E93;
+    --primary:#0A84FF; --primary-dark:#0060DF; --primary-light:rgba(10,132,255,0.15);
+    --amber:#FF9F0A; --green:#30D158; --red:#FF453A;
+    --violet:#BF5AF2;
+    --border:#38383A;
+    --font-body:-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+    --font-display:var(--font-body);
+    --font-mono:"SF Mono", ui-monospace, Menlo, monospace;
+    --tabbar-h:64px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font-body);min-height:100vh;-webkit-font-smoothing:antialiased;}
+  #app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;position:relative;}
+  h1,h2,h3{font-family:var(--font-display);margin:0;letter-spacing:-0.01em;}
+  .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 4px;}
+  .stack{display:flex;flex-direction:column;gap:14px;}
+  .row{display:flex;gap:10px;align-items:center;}
+  .spacer{flex:1;}
+
+  .screen-scroll{flex:1;overflow-y:auto;padding:16px 16px calc(var(--tabbar-h) + 24px);-webkit-overflow-scrolling:touch;}
+
+  label{font-size:13px;font-weight:500;color:var(--ink-soft);display:block;margin-bottom:6px;}
+  input, select, textarea{width:100%;font-family:var(--font-body);font-size:16px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface-alt);color:var(--ink);outline:none;}
+  input[type="checkbox"]{width:auto;margin-right:8px;accent-color:var(--primary);}
+  textarea{resize:vertical;min-height:64px;}
+  input:focus, select:focus, textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light);}
+  .field{margin-bottom:14px;}
+
+  button{font-family:var(--font-body);font-weight:600;font-size:15px;border:none;border-radius:12px;padding:12px 16px;cursor:pointer;}
+  .btn-primary{background:var(--primary);color:#fff;}
+  .btn-primary:active{background:var(--primary-dark);}
+  .btn-ghost{background:var(--surface-alt);color:var(--primary);border:1px solid var(--border);}
+  .btn-danger-ghost{background:transparent;color:var(--red);border:1px solid rgba(255,69,58,0.35);}
+  .btn-full{width:100%;}
+  .btn-sm{padding:8px 12px;font-size:13px;border-radius:9px;}
+  button:disabled{opacity:0.5;cursor:not-allowed;}
+
+  .card{background:var(--surface);border-radius:14px;padding:16px;border:1px solid var(--border);}
+  .error-msg{background:rgba(255,69,58,0.15);color:var(--red);font-size:13px;font-weight:600;padding:10px 12px;border-radius:10px;margin-bottom:14px;}
+  .hint{font-size:12.5px;color:var(--ink-soft);line-height:1.5;}
+
+  .tag{display:inline-block;font-family:var(--font-mono);font-size:10.5px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;padding:4px 9px;border-radius:100px;}
+  .tag-empleado{background:var(--primary-light);color:var(--primary);}
+  .tag-admin{background:rgba(191,90,242,0.15);color:var(--violet);}
+  .tag-pendiente{background:rgba(255,159,10,0.15);color:var(--amber);}
+  .tag-hecho{background:rgba(48,209,88,0.15);color:var(--green);}
+  .tag-urgente{background:var(--red);color:#fff;}
+  .tag-cat{background:var(--surface-alt);border:1px solid var(--border);color:var(--ink-soft);}
+
+  .badge-name{font-family:var(--font-display);font-size:20px;font-weight:700;margin:8px 0 2px;}
+
+  /* Lista estilo iOS agrupada */
+  .ios-list{background:var(--surface);border-radius:14px;overflow:hidden;border:1px solid var(--border);}
+  .ios-row{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border);}
+  .ios-row:last-child{border-bottom:none;}
+  .ios-row-main{flex:1;min-width:0;}
+  .ios-row-title{font-size:15.5px;font-weight:500;}
+  .ios-row-sub{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+  .ios-chevron{color:var(--ink-soft);font-size:18px;}
+
+  /* Switch estilo iOS */
+  .ios-switch{position:relative;width:46px;height:28px;border-radius:16px;background:var(--surface-alt);border:1px solid var(--border);flex-shrink:0;cursor:pointer;transition:background 0.15s;}
+  .ios-switch.on{background:var(--green);border-color:var(--green);}
+  .ios-switch::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform 0.15s;box-shadow:0 1px 3px rgba(0,0,0,0.3);}
+  .ios-switch.on::after{transform:translateX(18px);}
+
+  .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;}
+
+  .grid{display:flex;flex-direction:column;gap:12px;}
+  .empty{text-align:center;padding:32px 20px;color:var(--ink-soft);font-size:14px;}
+
+  .toast{position:fixed;bottom:calc(var(--tabbar-h) + 16px);left:50%;transform:translateX(-50%);background:var(--surface-alt);color:#fff;padding:12px 18px;border-radius:100px;font-size:13.5px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:150;max-width:90%;text-align:center;border:1px solid var(--border);}
+
+  .loading-screen{flex:1;display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-family:var(--font-mono);font-size:13px;}
+
+  /* Barra de pestañas inferior, estilo iOS */
+  .ios-tabbar{
+    position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
+    height:calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+    padding-bottom:env(safe-area-inset-bottom);
+    background:rgba(28,28,30,0.86);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    border-top:1px solid var(--border);
+    display:flex;z-index:100;
+  }
+  .ios-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;color:var(--ink-soft);font-size:10.5px;font-weight:500;padding:6px 2px 4px;border-radius:0;}
+  .ios-tab .tab-icon{font-size:22px;line-height:1;}
+  .ios-tab.active{color:var(--primary);}
+
+  .top-header{display:flex;align-items:center;justify-content:space-between;padding:14px 4px 4px;}
+  .company-name{font-family:var(--font-display);font-size:22px;font-weight:700;}
+  .logout-link{font-size:13px;color:var(--red);background:none;border:none;padding:6px;font-weight:600;}
+
+  .task-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:15px;}
+  .task-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .task-title{font-family:var(--font-display);font-weight:600;font-size:16px;}
+  .task-desc{font-size:13.5px;color:var(--ink-soft);margin-top:6px;line-height:1.4;}
+  .task-meta{font-size:11.5px;color:var(--ink-soft);margin-top:10px;font-family:var(--font-mono);line-height:1.5;background:var(--surface-alt);padding:8px;border-radius:8px;}
+  .task-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+  .task-photo{width:100%;border-radius:10px;display:block;height:130px;object-fit:cover;border:1px solid var(--border);cursor:zoom-in;margin-top:8px;}
+  .comments-section{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+  .comment-item{background:var(--surface-alt);padding:8px 12px;border-radius:8px;margin-bottom:8px;font-size:13px;}
+  .comment-author{font-weight:600;color:var(--primary);margin-bottom:2px;font-size:11px;text-transform:uppercase;font-family:var(--font-mono);}
+  .gps-badge{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:11px;color:var(--primary);text-decoration:none;font-weight:600;margin-top:8px;}
+
+  .filter-bar{display:flex;gap:6px;margin-bottom:12px;}
+  .filter-btn{flex:1;background:var(--surface);color:var(--ink-soft);font-size:12px;padding:8px;border-radius:9px;border:1px solid var(--border);}
+  .filter-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+  .cierre-form-modal{background:rgba(0,0,0,0.85);position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;padding:20px;z-index:200;backdrop-filter:blur(6px);}
+  .lightbox-overlay{background:rgba(0,0,0,0.94);position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;padding:20px;z-index:200;}
+  .lightbox-overlay img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;}
+  .lightbox-close{position:absolute;top:18px;right:18px;background:rgba(255,255,255,0.15);color:#fff;border:none;width:38px;height:38px;border-radius:50%;font-size:18px;}
+
+  .inv-item{display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--surface-alt);border-radius:12px;margin-bottom:8px;}
+  .inv-name{font-weight:600;font-size:15px;}
+  .inv-controls{display:flex;align-items:center;gap:10px;}
+  .inv-btn{background:var(--surface);border:1px solid var(--border);color:var(--ink);width:30px;height:30px;border-radius:8px;font-size:16px;display:flex;align-items:center;justify-content:center;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+  var BRIGADA_NOMBRE = 'Brigada de Sariñena';
+  var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_WIsoROQk7m6rQVcdgB7wRw_1nOFTlfD';
+  var FOTOS_BUCKET = 'tareas-fotos';
+  var VAPID_PUBLIC_KEY = 'BDGim65cFURiinn9YBihEuRJH-6Oefv3Kj-jn-ZFD6oH0AF1z11Ztj_HMqkmc3xMmRAkptlnrTxCZlH9CRKUQtk';
+
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false }
+  });
+
+  var state = {
+    screen: 'loading',
+    perfil: null,
+    usuarios: [],       // TODOS los perfiles (para admin) / miembros: solo secundarios (para principal)
+    tareas: [],
+    comentarios: [],
+    inventario: [],
+    apuntesBloc: [],
+    error: '', toast: '', busy: false,
+    principalTab: 'tareas',   // tareas, usuarios, inventario, bloc
+    secondaryTab: 'tareas',   // tareas, inventario, bloc
+    authTab: 'login',
+    filtroTareas: 'pendiente',
+    modalCierreTaskId: null,
+    tempGps: '',
+    lightboxUrl: null
+  };
+
+  function showToast(msg){
+    state.toast = msg; render();
+    setTimeout(function(){ state.toast=''; render(); }, 2600);
+  }
+  function setBusy(v){ state.busy = v; render(); }
+  function genId(prefix){ return (prefix||'x') + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  // --- LÓGICA DE DATOS ---
+  async function cargarDatosGlobales() {
+    var resT = await sb.from('tareas').select('*').order('created_at', {ascending:false});
+    if(!resT.error) state.tareas = resT.data || [];
+    var resC = await sb.from('comentarios_tarea').select('*').order('created_at', {ascending:true});
+    if(!resC.error) state.comentarios = resC.data || [];
+    var resI = await sb.from('inventario').select('*').order('articulo', {ascending:true});
+    if(!resI.error) state.inventario = resI.data || [];
+  }
+
+  async function cargarPerfil(userId){
+    var res = await sb.from('perfiles').select('*').eq('id', userId).maybeSingle();
+    return res.error ? null : res.data;
+  }
+
+  async function cargarUsuarios(){
+    var res = await sb.from('perfiles').select('*').order('created_at');
+    if(!res.error) state.usuarios = res.data || [];
+  }
+
+  async function cargarApuntesBloc(userId){
+    var res = await sb.from('notas_bloc').select('*').eq('user_id', userId).order('created_at', {ascending:false});
+    state.apuntesBloc = (res.data && !res.error) ? res.data : [];
+  }
+
+  function nombreDe(userId){
+    if(!userId) return '—';
+    if(state.perfil && state.perfil.id === userId) return state.perfil.nombre;
+    var m = state.usuarios.find(function(x){ return x.id === userId; });
+    return m ? m.nombre : 'Jefatura/Sistema';
+  }
+
+  function formatFecha(isoString){
+    if(!isoString) return '';
+    var d = new Date(isoString);
+    return d.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit'}) + ' ' + d.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  function exportarAExcel() {
+    var cabeceras = ["ID", "Título", "Categoría", "Urgencia", "Asignado a", "Estado", "Fecha Creación", "Cierre", "Notas Cierre"];
+    var lineas = [cabeceras.join(",")];
+    state.tareas.forEach(function(t) {
+      var linea = [t.id, '"' + (t.titulo||'').replace(/"/g,'""') + '"', t.categoria || 'General', t.urgencia ? 'URGENTE' : 'Normal',
+        '"' + nombreDe(t.assigned_to) + '"', t.status, t.created_at, t.cerrado_en || '', '"' + (t.notas_cierre||'').replace(/"/g,'""') + '"'];
+      lineas.push(linea.join(","));
+    });
+    var blob = new Blob(["\uFEFF" + lineas.join("\n")], {type: "text/csv;charset=utf-8;"});
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "Reporte_Brigada_Sarinena.csv";
+    link.click();
+    showToast("📊 Archivo Excel generado");
+  }
+
+  function pantallaSegunRol(rol){
+    if(rol === 'administrador') return 'adminHome';
+    if(rol === 'principal') return 'principalHome';
+    return 'secondaryHome';
+  }
+
+  function urlBase64ToUint8Array(base64String){
+    var padding = '='.repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for(var i = 0; i < rawData.length; ++i){ outputArray[i] = rawData.charCodeAt(i); }
+    return outputArray;
+  }
+
+  async function habilitarNotificaciones(){
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+      showToast('Este navegador no soporta notificaciones push');
+      return;
+    }
+    try{
+      var permiso = await Notification.requestPermission();
+      if(permiso !== 'granted'){ showToast('No se activaron: permiso denegado'); return; }
+      var reg = await navigator.serviceWorker.ready;
+      var existente = await reg.pushManager.getSubscription();
+      if(existente){ await existente.unsubscribe(); }
+      var sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+      var key = sub.toJSON();
+      var res = await sb.from('push_subscriptions').upsert({
+        user_id: state.perfil.id,
+        endpoint: key.endpoint,
+        p256dh: key.keys.p256dh,
+        auth: key.keys.auth
+      }, { onConflict: 'endpoint' });
+      if(res.error) throw res.error;
+      showToast('🔔 Notificaciones activadas en este dispositivo');
+    }catch(err){
+      showToast('Error al activar notificaciones: ' + err.message);
+    }
+  }
+
+  // --- ACCIONES ---
+  async function cargarSesionCompleta(perfil){
+    state.perfil = perfil;
+    await cargarUsuarios();
+    await cargarDatosGlobales();
+    await cargarApuntesBloc(perfil.id);
+    state.screen = pantallaSegunRol(perfil.rol);
+    suscribirCambiosTareas();
+  }
+
+  async function init(){
+    try{
+      var s = await sb.auth.getSession();
+      var session = s.data && s.data.session;
+      if(session){
+        var perfil = await cargarPerfil(session.user.id);
+        if(perfil){
+          await cargarSesionCompleta(perfil);
+          render();
+          return;
+        }
+      }
+    }catch(err){}
+    var resP = await sb.from('perfiles').select('id').in('rol', ['principal','administrador']).limit(1);
+    state.authTab = (resP.data && resP.data.length > 0) ? 'login' : 'register';
+    state.screen = 'auth';
+    render();
+  }
+
+  async function handleLogin(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    setBusy(true);
+    try{
+      var signIn = await sb.auth.signInWithPassword({ email: fd.get('email'), password: fd.get('password') });
+      if(signIn.error) throw signIn.error;
+      var perfil = await cargarPerfil(signIn.data.user.id);
+      if(perfil.rol === 'secundario' && perfil.status !== 'activo') {
+        await sb.auth.signOut(); throw new Error('Tu acceso está desactivado.');
+      }
+      await cargarSesionCompleta(perfil);
+    }catch(err){ state.error = err.message || 'Error de acceso.'; }
+    state.busy = false; render();
+  }
+
+  async function handleRegister(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var nombre = fd.get('nombre') ? fd.get('nombre').trim() : '';
+    var email = fd.get('email').trim();
+    var password = fd.get('password').trim();
+    setBusy(true);
+    try{
+      var resP = await sb.from('perfiles').select('id').in('rol', ['principal','administrador']).limit(1);
+      var esPrimero = !(resP.data && resP.data.length > 0);
+      var signUp = await sb.auth.signUp({ email: email, password: password });
+      if(signUp.error) throw signUp.error;
+      if(!signUp.data.session){
+        state.error = 'Cuenta creada, pero hace falta confirmar el email antes de entrar. Desactiva "Confirm email" en Supabase → Authentication → Providers → Email.';
+        state.busy = false; render(); return;
+      }
+      var user = signUp.data.user;
+      var insert = await sb.from('perfiles').insert({
+        id: user.id, nombre: nombre, rol: esPrimero ? 'principal' : 'secundario',
+        status: 'activo', disponible: true
+      }).select().single();
+      if(insert.error) throw insert.error;
+      await cargarSesionCompleta(insert.data);
+      showToast(esPrimero ? 'Cuenta creada — eres la jefatura' : '¡Bienvenido/a a la brigada!');
+    }catch(err){ state.error = err.message || 'No se pudo completar el registro.'; }
+    state.busy = false; render();
+  }
+
+  function suscribirCambiosTareas(){
+    sb.channel('tareas-en-vivo')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tareas' }, function(payload){
+        if(payload.eventType === 'UPDATE'){
+          var idx = state.tareas.findIndex(function(t){ return t.id === payload.new.id; });
+          var eraPendiente = idx !== -1 && state.tareas[idx].status === 'pendiente';
+          if(idx !== -1){ state.tareas[idx] = payload.new; } else { state.tareas.unshift(payload.new); }
+          if(state.perfil && (state.perfil.rol === 'principal' || state.perfil.rol === 'administrador') && eraPendiente && payload.new.status === 'hecho'){
+            var quien = nombreDe(payload.new.assigned_to);
+            showToast((payload.new.foto_despues_url ? '📷 ' : '✔️ ') + quien + ' finalizó "' + payload.new.titulo + '"' + (payload.new.foto_despues_url ? ' y envió una foto' : ''));
+          } else { render(); }
+        } else if(payload.eventType === 'INSERT'){
+          if(!state.tareas.some(function(t){ return t.id === payload.new.id; })){
+            state.tareas.unshift(payload.new);
+            if(state.perfil && state.perfil.rol === 'secundario' && payload.new.assigned_to === state.perfil.id){
+              showToast('🆕 Nueva tarea: ' + payload.new.titulo);
+            } else { render(); }
+          }
+        } else if(payload.eventType === 'DELETE'){
+          state.tareas = state.tareas.filter(function(t){ return t.id !== payload.old.id; });
+          render();
+        }
+      })
+      .subscribe();
+  }
+
+  function logout(){
+    sb.auth.signOut();
+    location.reload();
+  }
+
+  async function handleAddTask(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var file = e.target.querySelector('[name="fotoInicial"]').files[0];
+    setBusy(true);
+    try{
+      var fotoUrl = null;
+      if(file){
+        var path = 'antes/' + Date.now() + '.jpg';
+        var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+        if(subida.error){ throw new Error('Fallo al subir la foto: ' + subida.error.message); }
+        fotoUrl = sb.storage.from(FOTOS_BUCKET).getPublicUrl(path).data.publicUrl;
+      }
+      var res = await sb.from('tareas').insert({
+        titulo: fd.get('titulo').trim(), descripcion: fd.get('descripcion').trim(),
+        assigned_to: fd.get('assignedTo'), categoria: fd.get('categoria'),
+        urgencia: fd.get('urgencia') === 'on', status: 'pendiente',
+        created_by: state.perfil.id, foto_url: fotoUrl, ubicacion_gps: state.tempGps || null
+      }).select().single();
+      if(res.error) throw res.error;
+      state.tareas.unshift(res.data);
+      e.target.reset(); state.tempGps = '';
+      showToast('🚨 Orden generada');
+    }catch(err){ state.error = err.message; }
+    state.busy = false; render();
+  }
+
+  async function handleAddComentario(e, taskId){
+    e.preventDefault();
+    var input = e.target.querySelector('input[name="texto"]');
+    var txt = input.value.trim();
+    if(!txt) return;
+    try{
+      var res = await sb.from('comentarios_tarea').insert({ task_id: taskId, user_id: state.perfil.id, texto: txt }).select().single();
+      if(res.error) throw res.error;
+      state.comentarios.push(res.data);
+      input.value = ''; render();
+    }catch(err){ showToast('Error al comentar'); }
+  }
+
+  async function handleCerrarTarea(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var file = e.target.querySelector('[name="fotoDespues"]').files[0];
+    setBusy(true);
+    try {
+      var fotoUrl = null;
+      if(file){
+        var path = 'despues/' + Date.now() + '.jpg';
+        var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+        if(subida.error){ throw new Error('Fallo al subir la foto: ' + subida.error.message); }
+        fotoUrl = sb.storage.from(FOTOS_BUCKET).getPublicUrl(path).data.publicUrl;
+      }
+      var res = await sb.from('tareas').update({
+        status: 'hecho', notas_cierre: fd.get('notasCierre'), foto_despues_url: fotoUrl,
+        cerrado_en: new Date().toISOString(), cerrado_por: state.perfil.id
+      }).eq('id', state.modalCierreTaskId).select().single();
+      if(!res.error){
+        var idx = state.tareas.findIndex(function(t){ return t.id === state.modalCierreTaskId; });
+        if(idx !== -1) state.tareas[idx] = res.data;
+      } else { throw res.error; }
+      state.modalCierreTaskId = null;
+      showToast('✔️ Tarea Finalizada');
+    } catch(err) { showToast(err.message); }
+    state.busy = false; render();
+  }
+
+  async function handleUpdateInventario(id, qtyChange){
+    var item = state.inventario.find(function(i){ return i.id === id; });
+    if(!item) return;
+    var newQty = item.cantidad + qtyChange;
+    if(newQty < 0) newQty = 0;
+    try{ await sb.from('inventario').update({cantidad: newQty}).eq('id', id); item.cantidad = newQty; render(); }
+    catch(err){ showToast('Error'); }
+  }
+
+  async function handleAddInventario(e){
+    e.preventDefault();
+    var input = e.target.querySelector('input[name="articulo"]');
+    var num = e.target.querySelector('input[name="cantidad"]');
+    try{
+      var res = await sb.from('inventario').insert({ articulo: input.value, cantidad: parseInt(num.value)||0 }).select().single();
+      if(!res.error){ state.inventario.push(res.data); state.inventario.sort(function(a,b){return a.articulo.localeCompare(b.articulo);}); input.value=''; num.value=''; render(); }
+    }catch(err){ showToast('Error'); }
+  }
+
+  async function handleAddApunte(e){
+    e.preventDefault();
+    var input = e.target.querySelector('input[name="texto"]');
+    var txt = input.value.trim();
+    if(!txt) return;
+    try{
+      var res = await sb.from('notas_bloc').insert({ user_id: state.perfil.id, texto: txt }).select().single();
+      if(res.error) throw res.error;
+      state.apuntesBloc.unshift(res.data);
+      input.value = ''; render();
+      showToast('📝 Apunte guardado');
+    }catch(err){ showToast('Error al guardar: ' + err.message); }
+  }
+
+  async function borrarApunte(id){
+    if(!confirm('¿Borrar este apunte?')) return;
+    try{ await sb.from('notas_bloc').delete().eq('id', id); state.apuntesBloc = state.apuntesBloc.filter(function(a){return a.id!==id;}); render(); }
+    catch(err){ showToast('Error al borrar'); }
+  }
+
+  async function toggleDisponible(){
+    var u = state.perfil;
+    var nuevo = !u.disponible;
+    try{
+      await sb.from('perfiles').update({disponible: nuevo}).eq('id', u.id);
+      u.disponible = nuevo;
+      showToast(nuevo ? 'Ahora apareces como disponible' : 'Ahora apareces como ocupado');
+    }catch(err){ showToast('Error: ' + err.message); }
+    render();
+  }
+
+  // --- ACCIONES DE ADMINISTRADOR ---
+  async function cambiarRolUsuario(id, nuevoRol){
+    try{
+      var res = await sb.from('perfiles').update({rol: nuevoRol}).eq('id', id);
+      if(res.error) throw res.error;
+      var u = state.usuarios.find(function(x){return x.id===id;});
+      if(u) u.rol = nuevoRol;
+      render();
+      showToast('Rol actualizado');
+    }catch(err){ showToast('Error: ' + err.message); }
+  }
+
+  async function toggleStatusUsuario(id){
+    var u = state.usuarios.find(function(x){return x.id===id;});
+    if(!u) return;
+    var nuevo = u.status === 'activo' ? 'inactivo' : 'activo';
+    try{
+      await sb.from('perfiles').update({status: nuevo}).eq('id', id);
+      u.status = nuevo; render();
+    }catch(err){ showToast('Error: ' + err.message); }
+  }
+
+  async function eliminarUsuarioDefinitivo(id, nombre){
+    if(!confirm('¿Eliminar PERMANENTEMENTE la cuenta de ' + nombre + '? Esto no se puede deshacer.')) return;
+    setBusy(true);
+    try{
+      var s = await sb.auth.getSession();
+      var res = await fetch(SUPABASE_URL + '/functions/v1/admin-delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.data.session.access_token },
+        body: JSON.stringify({ userId: id })
+      });
+      var data = await res.json();
+      if(!res.ok){ throw new Error(data.error || 'No se pudo eliminar'); }
+      state.usuarios = state.usuarios.filter(function(u){ return u.id !== id; });
+      showToast('Cuenta eliminada');
+    }catch(err){ showToast('Error: ' + err.message); }
+    state.busy = false; render();
+  }
+
+  function goTo(screen){ state.error = ''; state.screen = screen; render(); }
+
+  // ---------- PANTALLAS ----------
+
+  function screenAuth(){
+    var isL = state.authTab === 'login';
+    return '\
+      <div class="screen-scroll">\
+        <div class="stack" style="margin-top:40px; text-align:center;">\
+          <h1 style="font-size:26px;">' + BRIGADA_NOMBRE + '</h1>\
+          <p class="hint">Ayuntamiento de Sariñena</p>\
+          <div class="ios-list" style="display:flex;margin-top:10px;">\
+            <button class="ios-tab ' + (isL?'active':'') + '" style="flex-direction:row;height:44px;" data-authtab="login">Iniciar sesión</button>\
+            <button class="ios-tab ' + (!isL?'active':'') + '" style="flex-direction:row;height:44px;" data-authtab="register">Registrarme</button>\
+          </div>\
+          <form id="' + (isL?'login-form':'register-form') + '" class="card stack" style="text-align:left;">\
+            ' + (state.error ? '<div class="error-msg">'+state.error+'</div>' : '') + '\
+            ' + (!isL ? '<div class="field"><input name="nombre" placeholder="Nombre completo" required></div>' : '') + '\
+            <div class="field"><input name="email" type="email" placeholder="Correo" required></div>\
+            <div class="field" style="margin-bottom:0;"><input name="password" type="password" placeholder="Contraseña" required></div>\
+            <button type="submit" class="btn-primary btn-full">' + (isL?'Entrar':'Crear Cuenta') + '</button>\
+          </form>\
+        </div>\
+      </div>';
+  }
+
+  function renderFilterBar(){
+    return '\
+      <div class="filter-bar">\
+        <button class="filter-btn '+(state.filtroTareas==='pendiente'?'active':'')+'" data-filter="pendiente">⏳ Pendientes</button>\
+        <button class="filter-btn '+(state.filtroTareas==='hecho'?'active':'')+'" data-filter="hecho">✅ Hechas</button>\
+        <button class="filter-btn '+(state.filtroTareas==='todos'?'active':'')+'" data-filter="todos">📂 Todas</button>\
+      </div>';
+  }
+
+  function renderBlocSection(){
+    var lista = state.apuntesBloc.map(function(a){
+      return '\
+        <div class="comment-item" style="position:relative; padding-right:36px;">\
+          <div class="comment-author">' + formatFecha(a.created_at) + '</div>\
+          <div>' + a.texto.replace(/\n/g, '<br>') + '</div>\
+          <button data-apunte-borrar="'+a.id+'" style="position:absolute; top:8px; right:8px; background:none; border:none; color:var(--ink-soft); font-size:14px; padding:2px;">🗑</button>\
+        </div>';
+    }).join('');
+    return '\
+      <div class="card stack">\
+        <div><h3 style="font-size:17px;">📝 Mi Bloc</h3><p class="hint" style="margin-top:4px;">Cada apunte se guarda con su fecha y hora, sin borrarse.</p></div>\
+        <form id="form-add-apunte" class="row">\
+          <input name="texto" placeholder="Ej: 40 sillas cargadas" required style="flex:1;">\
+          <button type="submit" class="btn-primary">Añadir</button>\
+        </form>\
+        <div class="stack" style="gap:8px;">' + (lista || '<p class="empty">Todavía no hay apuntes.</p>') + '</div>\
+      </div>';
+  }
+
+  function renderInventarioSection(puedeEditar){
+    var invList = state.inventario.map(function(i){
+      var controls = puedeEditar
+        ? '<button class="inv-btn" data-inv-id="'+i.id+'" data-inv-val="-1">-</button><span style="font-family:var(--font-mono); font-weight:bold; width:30px; text-align:center;">'+i.cantidad+'</span><button class="inv-btn" data-inv-id="'+i.id+'" data-inv-val="1">+</button>'
+        : '<span style="font-family:var(--font-mono); font-size:17px; font-weight:bold;">'+i.cantidad+' uds</span>';
+      return '<div class="inv-item"><div class="inv-name">'+i.articulo+'</div><div class="inv-controls">'+controls+'</div></div>';
+    }).join('');
+    var formAdd = puedeEditar ? '<form id="form-add-inv" class="row" style="margin-bottom:14px;"><input name="articulo" placeholder="Nuevo material" required style="flex:2;"><input name="cantidad" type="number" placeholder="Cant." required style="flex:1;"><button type="submit" class="btn-primary">Añadir</button></form>' : '';
+    return '<div class="card"><h3 style="margin-bottom:14px;font-size:17px;">📦 Inventario</h3>' + formAdd + '<div class="stack" style="gap:8px;">' + (invList || '<p class="empty">Almacén vacío</p>') + '</div></div>';
+  }
+
+  function taskCard(t, isGestor){
+    var done = t.status === 'hecho';
+    var comments = state.comentarios.filter(function(c){ return c.task_id === t.id; });
+    var htmlComments = '<div class="comments-section">';
+    if(comments.length){
+      htmlComments += comments.map(function(c){ return '<div class="comment-item"><div class="comment-author">'+nombreDe(c.user_id)+'</div><div>'+c.texto+'</div></div>'; }).join('');
+    }
+    if(!done){
+      htmlComments += '<form class="row form-comentario" data-task="'+t.id+'" style="margin-top:8px;"><input name="texto" placeholder="Escribir un comentario..." style="padding:8px 12px; font-size:13px;" required><button type="submit" class="btn-ghost btn-sm">💬</button></form>';
+    }
+    htmlComments += '</div>';
+    var m = '<div class="task-meta"><b>Asignado a:</b> ' + nombreDe(t.assigned_to) + '<br><b>Creado:</b> ' + formatFecha(t.created_at);
+    if(done && t.cerrado_en) m += '<br><b>Cerrado:</b> ' + formatFecha(t.cerrado_en) + ' (por ' + nombreDe(t.cerrado_por) + ')';
+    m += '</div>';
+    return '\
+      <div class="task-card" style="'+(t.urgencia && !done ? 'border-left: 4px solid var(--red);' : '')+'">\
+        <div class="task-top">\
+          <div class="task-title">' + t.titulo + '</div>\
+          <div style="display:flex; gap:4px; flex-direction:column; align-items:flex-end;">\
+            <span class="tag ' + (done ? 'tag-hecho' : 'tag-pendiente') + '">' + (done ? 'Hecho' : 'Pendiente') + '</span>\
+            ' + (t.urgencia ? '<span class="tag tag-urgente">🚨 Urgente</span>' : '') + '\
+          </div>\
+        </div>\
+        <div style="margin-top:6px;"><span class="tag tag-cat">' + (t.categoria||'General') + '</span></div>\
+        ' + (t.descripcion ? '<div class="task-desc">' + t.descripcion + '</div>' : '') + '\
+        ' + (t.ubicacion_gps ? '<a href="https://www.google.com/maps/dir/?api=1&destination='+t.ubicacion_gps+'&travelmode=driving" target="_blank" class="gps-badge">📍 Cómo llegar</a>' : '') + '\
+        ' + (t.foto_url ? '<img class="task-photo" src="'+t.foto_url+'" data-lightbox="'+t.foto_url+'">' : '') + '\
+        ' + (done && t.foto_despues_url ? '<div><div class="hint" style="color:var(--green);margin-top:8px;">📷 Foto de cierre de ' + nombreDe(t.cerrado_por) + '</div><img class="task-photo" src="'+t.foto_despues_url+'" data-lightbox="'+t.foto_despues_url+'"></div>' : '') + '\
+        ' + (done && t.notas_cierre ? '<div class="task-meta" style="background:var(--primary-light); color:var(--ink);"><b>Parte Final:</b> ' + t.notas_cierre + '</div>' : '') + '\
+        ' + m + htmlComments + '\
+        <div class="task-actions">\
+          ' + (!done ? '<button class="btn-primary btn-sm" data-action-complete="'+t.id+'">✔️ Finalizar Parte</button>' : '<button class="btn-ghost btn-sm" data-action-reabrir="'+t.id+'">🔄 Reabrir</button>') + '\
+          ' + (isGestor ? '<button class="btn-danger-ghost btn-sm" data-task-remove="'+t.id+'">Eliminar</button>' : '') + '\
+        </div>\
+      </div>';
+  }
+
+  function tareasTabContent(isGestor){
+    var tasks = state.tareas.filter(function(t){ return state.filtroTareas === 'todos' || t.status === state.filtroTareas; });
+    var memberOptions = state.usuarios.filter(function(m){ return m.rol === 'secundario' && m.status==='activo'; })
+      .map(function(m){ return '<option value="'+m.id+'">'+m.nombre+'</option>'; }).join('');
+    return '\
+      <div class="row" style="margin-bottom:14px;"><button class="btn-ghost btn-sm btn-full" id="btn-export">📊 Exportar a Excel (CSV)</button></div>\
+      <form id="add-task-form" class="card stack" style="margin-bottom:18px;">\
+        <h3 style="margin-bottom:0; font-size:16px;">+ Nueva Orden de Trabajo</h3>\
+        <div class="row">\
+          <select name="categoria" style="flex:1;"><option>General</option><option>Obras</option><option>Jardinería</option><option>Electricidad</option><option>Agua/Fontanería</option><option>Eventos</option></select>\
+          <label style="flex:1; margin:0; display:flex; align-items:center;"><input type="checkbox" name="urgencia"> 🚨 Urgente</label>\
+        </div>\
+        <div class="field" style="margin:0;"><select name="assignedTo" required><option value="">-- Asignar Operario --</option>' + memberOptions + '</select></div>\
+        <div class="field" style="margin:0;"><input name="titulo" placeholder="Qué hay que hacer" required></div>\
+        <div class="field" style="margin:0;"><textarea name="descripcion" placeholder="Instrucciones detalladas..."></textarea></div>\
+        <div class="row"><button type="button" class="btn-ghost btn-sm" id="btn-gps">📍 GPS</button><input type="file" name="fotoInicial" accept="image/*" style="padding:6px; font-size:12px;flex:1;"></div>\
+        <button type="submit" class="btn-primary btn-full">Enviar Orden</button>\
+      </form>\
+      ' + renderFilterBar() + '<div class="grid">' + (tasks.length ? tasks.map(function(t){return taskCard(t,isGestor);}).join('') : '<div class="empty">No hay órdenes.</div>') + '</div>';
+  }
+
+  function screenPrincipalHome(){
+    var tab = state.principalTab;
+    var htmlContent = '';
+    if(tab === 'tareas'){ htmlContent = tareasTabContent(true); }
+    else if(tab === 'usuarios'){
+      var mem = state.usuarios.filter(function(u){ return u.rol === 'secundario'; });
+      htmlContent = '<div class="ios-list">' + (mem.length ? mem.map(function(u){
+        return '<div class="ios-row"><div class="ios-row-main"><div class="ios-row-title">'+u.nombre+'</div><div class="ios-row-sub">'+(u.disponible?'🟢 Disponible':'🔴 Ocupado')+'</div></div><div class="ios-switch '+(u.status==='activo'?'on':'')+'" data-toggle-usuario="'+u.id+'"></div></div>';
+      }).join('') : '<div class="ios-row"><span class="empty">Nadie registrado todavía.</span></div>') + '</div>';
+    }
+    else if(tab === 'inventario'){ htmlContent = renderInventarioSection(true); }
+    else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
+
+    return '\
+      <div class="top-header"><div><p class="eyebrow">Jefatura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><button class="logout-link" data-go="logout">Salir</button></div>\
+      <div class="screen-scroll">\
+        <button class="btn-ghost btn-full" id="btn-activar-push" style="margin-bottom:14px;">🔔 Activar notificaciones</button>\
+        ' + htmlContent + '\
+      </div>\
+      <div class="ios-tabbar">\
+        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">📋</span>Órdenes</button>\
+        <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">👥</span>Equipo</button>\
+        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">📦</span>Stock</button>\
+        <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">📝</span>Bloc</button>\
+      </div>';
+  }
+
+  function screenAdminHome(){
+    var tab = state.principalTab;
+    var htmlContent = '';
+    if(tab === 'tareas'){ htmlContent = tareasTabContent(true); }
+    else if(tab === 'usuarios'){
+      htmlContent = '<div class="ios-list">' + state.usuarios.map(function(u){
+        var opciones = ['administrador','principal','secundario'].map(function(r){
+          return '<option value="'+r+'" '+(u.rol===r?'selected':'')+'>'+r+'</option>';
+        }).join('');
+        return '\
+          <div class="ios-row" style="flex-wrap:wrap;">\
+            <div class="ios-row-main">\
+              <div class="ios-row-title">'+u.nombre+' '+(u.id===state.perfil.id?'(tú)':'')+'</div>\
+              <div class="ios-row-sub">'+u.rol+' · '+(u.status==='activo'?'activo':'inactivo')+'</div>\
+            </div>\
+            <select data-cambiar-rol="'+u.id+'" style="width:auto;padding:6px 8px;font-size:12px;" '+(u.id===state.perfil.id?'disabled':'')+'>'+opciones+'</select>\
+            <div class="ios-switch '+(u.status==='activo'?'on':'')+'" data-toggle-usuario="'+u.id+'" style="'+(u.id===state.perfil.id?'opacity:0.4;pointer-events:none;':'')+'"></div>\
+            <button class="btn-danger-ghost btn-sm" data-eliminar-usuario="'+u.id+'" data-nombre-usuario="'+u.nombre+'" '+(u.id===state.perfil.id?'disabled':'')+' style="width:100%;margin-top:8px;">Eliminar cuenta definitivamente</button>\
+          </div>';
+      }).join('') + '</div>';
+    }
+    else if(tab === 'inventario'){ htmlContent = renderInventarioSection(true); }
+    else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
+
+    return '\
+      <div class="top-header"><div><p class="eyebrow">Administrador</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><button class="logout-link" data-go="logout">Salir</button></div>\
+      <div class="screen-scroll">\
+        <button class="btn-ghost btn-full" id="btn-activar-push" style="margin-bottom:14px;">🔔 Activar notificaciones</button>\
+        ' + htmlContent + '\
+      </div>\
+      <div class="ios-tabbar">\
+        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">📋</span>Órdenes</button>\
+        <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">🛠️</span>Usuarios</button>\
+        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">📦</span>Stock</button>\
+        <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">📝</span>Bloc</button>\
+      </div>';
+  }
+
+  function badgeCard(u){
+    var isPrincipal = u.rol === 'principal' || u.rol === 'administrador';
+    return '\
+      <div class="card" style="text-align:center;">\
+        <span class="tag ' + (isPrincipal ? 'tag-admin' : 'tag-empleado') + '">' + u.rol + '</span>\
+        <div class="badge-name">' + u.nombre + '</div>\
+      </div>';
+  }
+
+  function screenSecondaryHome(){
+    var u = state.perfil;
+    var tab = state.secondaryTab;
+    var tasks = state.tareas.filter(function(t){ return t.assigned_to === u.id && (state.filtroTareas === 'todos' || t.status === state.filtroTareas); });
+    var htmlContent = '';
+    if(tab === 'tareas'){
+      htmlContent = badgeCard(u) + '<div style="margin:12px 0;"><button class="btn-ghost btn-full" data-toggle-disp>Cambiar a '+(u.disponible?'Ocupado':'Disponible')+'</button><button class="btn-ghost btn-full" id="btn-activar-push" style="margin-top:8px;">🔔 Activar notificaciones</button></div>' + renderFilterBar() + '<div class="grid">' + (tasks.length ? tasks.map(function(t){return taskCard(t,false);}).join('') : '<div class="empty">Sin tareas asignadas.</div>') + '</div>';
+    } else if(tab === 'inventario'){ htmlContent = renderInventarioSection(false); }
+    else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
+
+    return '\
+      <div class="top-header"><div><p class="eyebrow">' + BRIGADA_NOMBRE + '</p><div class="company-name">Mi perfil</div></div><button class="logout-link" data-go="logout">Salir</button></div>\
+      <div class="screen-scroll">' + htmlContent + '</div>\
+      <div class="ios-tabbar">\
+        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-sectab="tareas"><span class="tab-icon">📋</span>Tareas</button>\
+        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-sectab="inventario"><span class="tab-icon">📦</span>Stock</button>\
+        <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-sectab="bloc"><span class="tab-icon">📝</span>Bloc</button>\
+      </div>';
+  }
+
+  // ---------- RENDER / EVENTOS ----------
+
+  function render(){
+    var app = document.getElementById('app');
+    var html = state.screen === 'loading' ? '<div class="loading-screen">Cargando…</div>'
+      : state.screen === 'auth' ? screenAuth()
+      : state.screen === 'adminHome' ? screenAdminHome()
+      : state.screen === 'principalHome' ? screenPrincipalHome()
+      : screenSecondaryHome();
+
+    if(state.modalCierreTaskId){
+      html += '<div class="cierre-form-modal"><form id="modal-cierre-form" class="card stack" style="width:100%; max-width:400px;"><h3>Finalizar Tarea</h3><div class="field"><label>Parte de cierre</label><textarea name="notasCierre" required></textarea></div><div class="field"><label>Foto del resultado (Opcional)</label><input type="file" name="fotoDespues" accept="image/*"></div><div class="row"><button type="button" class="btn-ghost spacer" id="close-modal-btn">Cancelar</button><button type="submit" class="btn-primary spacer">Cerrar Tarea</button></div></form></div>';
+    }
+    if(state.lightboxUrl){
+      html += '<div class="lightbox-overlay" id="lightbox-overlay"><button class="lightbox-close" id="lightbox-close">✕</button><img src="'+state.lightboxUrl+'"></div>';
+    }
+    if(state.toast) html += '<div class="toast">' + state.toast + '</div>';
+    app.innerHTML = html;
+    wireEvents();
+  }
+
+  function wireEvents(){
+    var app = document.getElementById('app');
+    app.querySelectorAll('[data-go]').forEach(function(n){ n.addEventListener('click', function(){ if(n.getAttribute('data-go')==='logout'){ logout(); } else { goTo(n.getAttribute('data-go')); } }); });
+    app.querySelectorAll('[data-tab]').forEach(function(n){ n.addEventListener('click', function(){ state.principalTab = n.getAttribute('data-tab'); render(); }); });
+    app.querySelectorAll('[data-sectab]').forEach(function(n){ n.addEventListener('click', function(){ state.secondaryTab = n.getAttribute('data-sectab'); render(); }); });
+    app.querySelectorAll('[data-authtab]').forEach(function(n){ n.addEventListener('click', function(){ state.authTab = n.getAttribute('data-authtab'); state.error=''; render(); }); });
+    app.querySelectorAll('[data-filter]').forEach(function(n){ n.addEventListener('click', function(){ state.filtroTareas = n.getAttribute('data-filter'); render(); }); });
+
+    app.querySelectorAll('[data-action-complete]').forEach(function(n){ n.addEventListener('click', function(){ state.modalCierreTaskId = n.getAttribute('data-action-complete'); render(); }); });
+    app.querySelectorAll('[data-action-reabrir]').forEach(function(n){ n.addEventListener('click', async function(){
+      await sb.from('tareas').update({status:'pendiente', notas_cierre:null}).eq('id', n.getAttribute('data-action-reabrir'));
+      await cargarDatosGlobales(); render(); showToast("Tarea Reabierta");
+    }); });
+    app.querySelectorAll('[data-task-remove]').forEach(function(n){ n.addEventListener('click', async function(){
+      if(confirm('¿Borrar tarea?')){ await sb.from('tareas').delete().eq('id', n.getAttribute('data-task-remove')); await cargarDatosGlobales(); render(); }
+    }); });
+
+    app.querySelectorAll('.form-comentario').forEach(function(f){ f.addEventListener('submit', function(e){ handleAddComentario(e, f.getAttribute('data-task')); }); });
+
+    app.querySelectorAll('.inv-btn').forEach(function(btn){ btn.addEventListener('click', function(){ handleUpdateInventario(btn.getAttribute('data-inv-id'), parseInt(btn.getAttribute('data-inv-val'))); }); });
+    var formInv = document.getElementById('form-add-inv'); if(formInv) formInv.addEventListener('submit', handleAddInventario);
+
+    var formApunte = document.getElementById('form-add-apunte'); if(formApunte) formApunte.addEventListener('submit', handleAddApunte);
+    app.querySelectorAll('[data-apunte-borrar]').forEach(function(btn){ btn.addEventListener('click', function(){ borrarApunte(btn.getAttribute('data-apunte-borrar')); }); });
+
+    var btnExport = document.getElementById('btn-export'); if(btnExport) btnExport.addEventListener('click', exportarAExcel);
+
+    var lf = document.getElementById('login-form'); if(lf) lf.addEventListener('submit', handleLogin);
+    var rf = document.getElementById('register-form'); if(rf) rf.addEventListener('submit', handleRegister);
+    var atf = document.getElementById('add-task-form'); if(atf) atf.addEventListener('submit', handleAddTask);
+    var mcf = document.getElementById('modal-cierre-form'); if(mcf) mcf.addEventListener('submit', handleCerrarTarea);
+    var cmb = document.getElementById('close-modal-btn'); if(cmb) cmb.addEventListener('click', function(){ state.modalCierreTaskId = null; render(); });
+
+    var btnGps = document.getElementById('btn-gps');
+    if(btnGps) btnGps.addEventListener('click', function(){ navigator.geolocation.getCurrentPosition(function(pos){ state.tempGps = pos.coords.latitude+","+pos.coords.longitude; btnGps.innerHTML="✅ GPS OK"; }, function(){ showToast("Error GPS"); }); });
+
+    var btnPush = document.getElementById('btn-activar-push'); if(btnPush) btnPush.addEventListener('click', habilitarNotificaciones);
+    var dispBtn = document.querySelector('[data-toggle-disp]'); if(dispBtn) dispBtn.addEventListener('click', toggleDisponible);
+
+    app.querySelectorAll('[data-lightbox]').forEach(function(img){ img.addEventListener('click', function(){ state.lightboxUrl = img.getAttribute('data-lightbox'); render(); }); });
+    var lbOverlay = document.getElementById('lightbox-overlay'); if(lbOverlay) lbOverlay.addEventListener('click', function(){ state.lightboxUrl = null; render(); });
+    var lbClose = document.getElementById('lightbox-close'); if(lbClose) lbClose.addEventListener('click', function(e){ e.stopPropagation(); state.lightboxUrl = null; render(); });
+
+    // Admin
+    app.querySelectorAll('[data-toggle-usuario]').forEach(function(n){ n.addEventListener('click', function(){ toggleStatusUsuario(n.getAttribute('data-toggle-usuario')); }); });
+    app.querySelectorAll('[data-cambiar-rol]').forEach(function(n){ n.addEventListener('change', function(){ cambiarRolUsuario(n.getAttribute('data-cambiar-rol'), n.value); }); });
+    app.querySelectorAll('[data-eliminar-usuario]').forEach(function(n){ n.addEventListener('click', function(){ eliminarUsuarioDefinitivo(n.getAttribute('data-eliminar-usuario'), n.getAttribute('data-nombre-usuario')); }); });
+  }
+
+  function refrescarAlVolver(){
+    if(!state.perfil) return;
+    cargarDatosGlobales().then(function(){ cargarUsuarios().then(render); });
+  }
+  document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible'){ refrescarAlVolver(); } });
+  window.addEventListener('focus', refrescarAlVolver);
+
+  render(); init();
+})();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(err){ console.warn('No se pudo registrar el service worker:', err); });
+  });
+}
+</script>
+</body>
+</html>
