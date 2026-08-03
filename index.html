@@ -835,8 +835,20 @@
     app.querySelectorAll('[data-eliminar-usuario]').forEach(function(n){ n.addEventListener('click', function(){ eliminarUsuarioDefinitivo(n.getAttribute('data-eliminar-usuario'), n.getAttribute('data-nombre-usuario')); }); });
   }
 
+  function hayFormularioSinGuardar(){
+    var campos = document.querySelectorAll('#add-task-form input[type="text"], #add-task-form input:not([type]), #add-task-form textarea, #add-task-form input[name="titulo"], #add-task-form input[name="descripcion"], #modal-cierre-form textarea');
+    for(var i=0;i<campos.length;i++){ if(campos[i].value && campos[i].value.trim() !== ''){ return true; } }
+    var fotoInicial = document.querySelector('#add-task-form input[name="fotoInicial"]');
+    if(fotoInicial && fotoInicial.files && fotoInicial.files.length > 0) return true;
+    var fotoDespues = document.querySelector('#modal-cierre-form input[name="fotoDespues"]');
+    if(fotoDespues && fotoDespues.files && fotoDespues.files.length > 0) return true;
+    if(state.modalCierreTaskId) return true;
+    return false;
+  }
+
   function refrescarAlVolver(){
     if(!state.perfil) return;
+    if(hayFormularioSinGuardar()) return;
     if('clearAppBadge' in navigator){ navigator.clearAppBadge().catch(function(){}); }
     cargarDatosGlobales().then(function(){ cargarUsuarios().then(render); });
   }
