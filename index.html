@@ -278,6 +278,7 @@
   // --- ACCIONES ---
   async function cargarSesionCompleta(perfil){
     state.perfil = perfil;
+    if('clearAppBadge' in navigator){ navigator.clearAppBadge().catch(function(){}); }
     await cargarUsuarios();
     await cargarDatosGlobales();
     await cargarApuntesBloc(perfil.id);
@@ -826,6 +827,7 @@
 
   function refrescarAlVolver(){
     if(!state.perfil) return;
+    if('clearAppBadge' in navigator){ navigator.clearAppBadge().catch(function(){}); }
     cargarDatosGlobales().then(function(){ cargarUsuarios().then(render); });
   }
   document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible'){ refrescarAlVolver(); } });

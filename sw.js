@@ -4,7 +4,7 @@
 // Los datos (tareas, usuarios, fotos) siempre se piden en vivo a Supabase,
 // así que hace falta conexión a internet para usar la app con normalidad.
 
-var CACHE_NAME = 'brigada-sarinena-v11';
+var CACHE_NAME = 'brigada-sarinena-v12';
 var ARCHIVOS_CACHE = [
   './',
   './index.html',
@@ -57,6 +57,11 @@ self.addEventListener('push', function(event){
   };
   event.waitUntil(
     self.registration.showNotification(data.title || 'Brigada de Sariñena', options)
+      .then(function(){
+        if('setAppBadge' in self.navigator && typeof data.contador === 'number'){
+          return self.navigator.setAppBadge(data.contador).catch(function(){});
+        }
+      })
       .catch(function(err){ console.error('Error mostrando notificación:', err); })
   );
 });
