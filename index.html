@@ -384,7 +384,9 @@
     e.preventDefault();
     var fd = new FormData(e.target);
     var file = e.target.querySelector('[name="fotoInicial"]').files[0];
-    setBusy(true);
+    var btn = e.target.querySelector('button[type="submit"]');
+    if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
+    state.busy = true;
     try{
       var fotoUrl = null;
       if(file){
@@ -401,9 +403,12 @@
       }).select().single();
       if(res.error) throw res.error;
       state.tareas.unshift(res.data);
-      e.target.reset(); state.tempGps = '';
+      state.tempGps = '';
       showToast('🚨 Orden generada');
-    }catch(err){ state.error = err.message; }
+    }catch(err){
+      state.error = err.message;
+      if(btn){ btn.disabled = false; btn.textContent = 'Enviar Orden'; }
+    }
     state.busy = false; render();
   }
 
@@ -424,7 +429,9 @@
     e.preventDefault();
     var fd = new FormData(e.target);
     var file = e.target.querySelector('[name="fotoDespues"]').files[0];
-    setBusy(true);
+    var btn = e.target.querySelector('button[type="submit"]');
+    if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
+    state.busy = true;
     try {
       var fotoUrl = null;
       if(file){
@@ -443,7 +450,10 @@
       } else { throw res.error; }
       state.modalCierreTaskId = null;
       showToast('✔️ Tarea Finalizada');
-    } catch(err) { showToast(err.message); }
+    } catch(err) {
+      showToast(err.message);
+      if(btn){ btn.disabled = false; btn.textContent = 'Cerrar Tarea'; }
+    }
     state.busy = false; render();
   }
 
