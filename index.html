@@ -433,11 +433,19 @@
 
   async function handleCerrarTarea(e){
     e.preventDefault();
-    var fd = new FormData(e.target);
-    var file = e.target.querySelector('[name="fotoDespues"]').files[0];
-    var btn = e.target.querySelector('button[type="submit"]');
-    if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
-    state.busy = true;
+    alert('EMPEZANDO handleCerrarTarea');
+    try{
+      var fd = new FormData(e.target);
+      var inputFoto = e.target.querySelector('[name="fotoDespues"]');
+      var file = (inputFoto && inputFoto.files) ? inputFoto.files[0] : null;
+      var btn = e.target.querySelector('button[type="submit"]');
+      if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
+      state.busy = true;
+      showToast('⏳ Procesando cierre...');
+    }catch(errInicial){
+      showToast('⚠️ ERROR INICIAL: ' + errInicial.message);
+      return;
+    }
     console.log('CIERRE: empezando. modalCierreTaskId=', state.modalCierreTaskId, 'file=', file);
     try {
       var fotoUrl = null;
