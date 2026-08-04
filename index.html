@@ -231,6 +231,12 @@
     showToast("📊 Archivo Excel generado");
   }
 
+  function nombreRol(rol){
+    if(rol === 'administrador') return 'Admin';
+    if(rol === 'principal') return 'Jefatura';
+    return 'Miembro';
+  }
+
   function pantallaSegunRol(rol){
     if(rol === 'administrador') return 'adminHome';
     if(rol === 'principal') return 'principalHome';
@@ -432,25 +438,38 @@
     var btn = e.target.querySelector('button[type="submit"]');
     if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
     state.busy = true;
+    console.log('CIERRE: empezando. modalCierreTaskId=', state.modalCierreTaskId, 'file=', file);
     try {
       var fotoUrl = null;
       if(file){
         var path = 'despues/' + Date.now() + '.jpg';
         var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+        console.log('CIERRE: resultado subida=', subida);
         if(subida.error){ throw new Error('Fallo al subir la foto: ' + subida.error.message); }
         fotoUrl = sb.storage.from(FOTOS_BUCKET).getPublicUrl(path).data.publicUrl;
+      }
+      console.log('CIERRE: fotoUrl final=', fotoUrl, 'id a actualizar=', state.modalCierreTaskId);
+      if(!state.modalCierreTaskId){
+        showToast('⚠️ DEBUG: no hay ID de tarea (modalCierreTaskId vacío)');
+        state.busy = false; if(btn){ btn.disabled=false; btn.textContent='Cerrar Tarea'; } render();
+        return;
       }
       var res = await sb.from('tareas').update({
         status: 'hecho', notas_cierre: fd.get('notasCierre'), foto_despues_url: fotoUrl,
         cerrado_en: new Date().toISOString(), cerrado_por: state.perfil.id
       }).eq('id', state.modalCierreTaskId).select().single();
-      if(!res.error){
-        var idx = state.tareas.findIndex(function(t){ return t.id === state.modalCierreTaskId; });
-        if(idx !== -1) state.tareas[idx] = res.data;
-      } else { throw res.error; }
+      console.log('CIERRE: resultado update=', res);
+      if(res.error){
+        showToast('⚠️ DEBUG update error: ' + JSON.stringify(res.error));
+        state.busy = false; if(btn){ btn.disabled=false; btn.textContent='Cerrar Tarea'; } render();
+        return;
+      }
+      var idx = state.tareas.findIndex(function(t){ return t.id === state.modalCierreTaskId; });
+      if(idx !== -1) state.tareas[idx] = res.data;
       state.modalCierreTaskId = null;
-      showToast('✔️ Tarea Finalizada');
+      showToast('✔️ Tarea Finalizada — foto: ' + (res.data.foto_despues_url ? 'SÍ' : 'no'));
     } catch(err) {
+      console.log('CIERRE: ERROR CAPTURADO=', err);
       showToast(err.message);
       if(btn){ btn.disabled = false; btn.textContent = 'Cerrar Tarea'; }
     }
@@ -705,13 +724,13 @@
     else if(tab === 'usuarios'){
       htmlContent = '<div class="ios-list">' + state.usuarios.map(function(u){
         var opciones = ['administrador','principal','secundario'].map(function(r){
-          return '<option value="'+r+'" '+(u.rol===r?'selected':'')+'>'+r+'</option>';
+          return '<option value="'+r+'" '+(u.rol===r?'selected':'')+'>'+nombreRol(r)+'</option>';
         }).join('');
         return '\
           <div class="ios-row" style="flex-wrap:wrap;">\
             <div class="ios-row-main">\
               <div class="ios-row-title">'+u.nombre+' '+(u.id===state.perfil.id?'(tú)':'')+'</div>\
-              <div class="ios-row-sub">'+u.rol+' · '+(u.status==='activo'?'activo':'inactivo')+'</div>\
+              <div class="ios-row-sub">'+nombreRol(u.rol)+' · '+(u.status==='activo'?'activo':'inactivo')+'</div>\
             </div>\
             <select data-cambiar-rol="'+u.id+'" style="width:auto;padding:6px 8px;font-size:12px;" '+(u.id===state.perfil.id?'disabled':'')+'>'+opciones+'</select>\
             <div class="ios-switch '+(u.status==='activo'?'on':'')+'" data-toggle-usuario="'+u.id+'" style="'+(u.id===state.perfil.id?'opacity:0.4;pointer-events:none;':'')+'"></div>\
@@ -723,7 +742,7 @@
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
 
     return '\
-      <div class="top-header"><div><p class="eyebrow">Administrador</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><button class="logout-link" data-go="logout">Salir</button></div>\
+      <div class="top-header"><div><p class="eyebrow">Admin</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><button class="logout-link" data-go="logout">Salir</button></div>\
       <div class="screen-scroll">\
         <button class="btn-ghost btn-full" id="btn-activar-push" style="margin-bottom:14px;">🔔 Activar notificaciones</button>\
         ' + htmlContent + '\
@@ -740,7 +759,7 @@
     var isPrincipal = u.rol === 'principal' || u.rol === 'administrador';
     return '\
       <div class="card" style="text-align:center;">\
-        <span class="tag ' + (isPrincipal ? 'tag-admin' : 'tag-empleado') + '">' + u.rol + '</span>\
+        <span class="tag ' + (isPrincipal ? 'tag-admin' : 'tag-empleado') + '">' + nombreRol(u.rol) + '</span>\
         <div class="badge-name">' + u.nombre + '</div>\
       </div>';
   }
