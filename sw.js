@@ -4,7 +4,7 @@
 // Los datos (tareas, usuarios, fotos) siempre se piden en vivo a Supabase,
 // así que hace falta conexión a internet para usar la app con normalidad.
 
-var CACHE_NAME = 'brigada-sarinena-v19';
+var CACHE_NAME = 'brigada-sarinena-v20';
 var ARCHIVOS_CACHE = [
   './',
   './index.html',

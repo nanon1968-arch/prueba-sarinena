@@ -362,6 +362,7 @@
           var idx = state.tareas.findIndex(function(t){ return t.id === payload.new.id; });
           var eraPendiente = idx !== -1 && state.tareas[idx].status === 'pendiente';
           if(idx !== -1){ state.tareas[idx] = payload.new; } else { state.tareas.unshift(payload.new); }
+          if(hayFormularioSinGuardar()) return;
           if(state.perfil && (state.perfil.rol === 'principal' || state.perfil.rol === 'administrador') && eraPendiente && payload.new.status === 'hecho'){
             var quien = nombreDe(payload.new.assigned_to);
             showToast((payload.new.foto_despues_url ? '📷 ' : '✔️ ') + quien + ' finalizó "' + payload.new.titulo + '"' + (payload.new.foto_despues_url ? ' y envió una foto' : ''));
@@ -369,12 +370,14 @@
         } else if(payload.eventType === 'INSERT'){
           if(!state.tareas.some(function(t){ return t.id === payload.new.id; })){
             state.tareas.unshift(payload.new);
+            if(hayFormularioSinGuardar()) return;
             if(state.perfil && state.perfil.rol === 'secundario' && payload.new.assigned_to === state.perfil.id){
               showToast('🆕 Nueva tarea: ' + payload.new.titulo);
             } else { render(); }
           }
         } else if(payload.eventType === 'DELETE'){
           state.tareas = state.tareas.filter(function(t){ return t.id !== payload.old.id; });
+          if(hayFormularioSinGuardar()) return;
           render();
         }
       })
