@@ -444,7 +444,7 @@
       var btn = e.target.querySelector('button[type="submit"]');
       if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
       state.busy = true;
-      showToast('⏳ Procesando cierre...');
+      alert('LLEGUE A: procesando cierre, file=' + (file ? file.name : 'null'));
     }catch(errInicial){
       showToast('⚠️ ERROR INICIAL: ' + errInicial.message);
       return;
@@ -455,6 +455,7 @@
       if(file){
         var path = 'despues/' + Date.now() + '.jpg';
         var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+        alert('LLEGUE A: tras subida. error=' + JSON.stringify(subida.error));
         console.log('CIERRE: resultado subida=', subida);
         if(subida.error){ throw new Error('Fallo al subir la foto: ' + subida.error.message); }
         fotoUrl = sb.storage.from(FOTOS_BUCKET).getPublicUrl(path).data.publicUrl;
