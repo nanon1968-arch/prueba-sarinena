@@ -400,7 +400,8 @@
       var fotoUrl = null;
       if(file){
         var path = 'antes/' + Date.now() + '.jpg';
-        var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+        var contenido = await file.arrayBuffer();
+        var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, contenido, { upsert: true, contentType: file.type || 'image/jpeg' });
         if(subida.error){ throw new Error('Fallo al subir la foto: ' + subida.error.message); }
         fotoUrl = sb.storage.from(FOTOS_BUCKET).getPublicUrl(path).data.publicUrl;
       }
@@ -436,33 +437,23 @@
 
   async function handleCerrarTarea(e){
     e.preventDefault();
-    alert('EMPEZANDO handleCerrarTarea');
-    try{
-      var fd = new FormData(e.target);
-      var inputFoto = e.target.querySelector('[name="fotoDespues"]');
-      var file = (inputFoto && inputFoto.files) ? inputFoto.files[0] : null;
-      var btn = e.target.querySelector('button[type="submit"]');
-      if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
-      state.busy = true;
-      alert('LLEGUE A: procesando cierre, file=' + (file ? file.name : 'null'));
-    }catch(errInicial){
-      showToast('⚠️ ERROR INICIAL: ' + errInicial.message);
-      return;
-    }
-    console.log('CIERRE: empezando. modalCierreTaskId=', state.modalCierreTaskId, 'file=', file);
+    var fd = new FormData(e.target);
+    var inputFoto = e.target.querySelector('[name="fotoDespues"]');
+    var file = (inputFoto && inputFoto.files) ? inputFoto.files[0] : null;
+    var btn = e.target.querySelector('button[type="submit"]');
+    if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
+    state.busy = true;
     try {
       var fotoUrl = null;
       if(file){
         var path = 'despues/' + Date.now() + '.jpg';
-        var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
-        alert('LLEGUE A: tras subida. error=' + JSON.stringify(subida.error));
-        console.log('CIERRE: resultado subida=', subida);
+        var contenido = await file.arrayBuffer();
+        var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, contenido, { upsert: true, contentType: file.type || 'image/jpeg' });
         if(subida.error){ throw new Error('Fallo al subir la foto: ' + subida.error.message); }
         fotoUrl = sb.storage.from(FOTOS_BUCKET).getPublicUrl(path).data.publicUrl;
       }
-      console.log('CIERRE: fotoUrl final=', fotoUrl, 'id a actualizar=', state.modalCierreTaskId);
       if(!state.modalCierreTaskId){
-        showToast('⚠️ DEBUG: no hay ID de tarea (modalCierreTaskId vacío)');
+        showToast('⚠️ No hay tarea seleccionada');
         state.busy = false; if(btn){ btn.disabled=false; btn.textContent='Cerrar Tarea'; } render();
         return;
       }
@@ -470,18 +461,16 @@
         status: 'hecho', notas_cierre: fd.get('notasCierre'), foto_despues_url: fotoUrl,
         cerrado_en: new Date().toISOString(), cerrado_por: state.perfil.id
       }).eq('id', state.modalCierreTaskId).select().single();
-      console.log('CIERRE: resultado update=', res);
       if(res.error){
-        showToast('⚠️ DEBUG update error: ' + JSON.stringify(res.error));
+        showToast('⚠️ Error: ' + res.error.message);
         state.busy = false; if(btn){ btn.disabled=false; btn.textContent='Cerrar Tarea'; } render();
         return;
       }
       var idx = state.tareas.findIndex(function(t){ return t.id === state.modalCierreTaskId; });
       if(idx !== -1) state.tareas[idx] = res.data;
       state.modalCierreTaskId = null;
-      showToast('✔️ Tarea Finalizada — foto: ' + (res.data.foto_despues_url ? 'SÍ' : 'no'));
+      showToast('✔️ Tarea Finalizada' + (res.data.foto_despues_url ? ' (con foto)' : ''));
     } catch(err) {
-      console.log('CIERRE: ERROR CAPTURADO=', err);
       showToast(err.message);
       if(btn){ btn.disabled = false; btn.textContent = 'Cerrar Tarea'; }
     }
