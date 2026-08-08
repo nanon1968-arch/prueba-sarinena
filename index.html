@@ -505,8 +505,14 @@
   async function handleAddTask(e){
     e.preventDefault();
     var fd = new FormData(e.target);
+    var idsSeleccionados = fd.getAll('assignedTo');
     var file = e.target.querySelector('[name="fotoInicial"]').files[0];
     var btn = e.target.querySelector('button[type="submit"]');
+    if(idsSeleccionados.length === 0){
+      state.error = 'Marca al menos un operario para asignar la tarea.';
+      render();
+      return;
+    }
     if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
     state.busy = true;
     try{
@@ -518,16 +524,23 @@
         if(subida.error){ throw new Error('Fallo al subir la foto: ' + subida.error.message); }
         fotoUrl = sb.storage.from(FOTOS_BUCKET).getPublicUrl(path).data.publicUrl;
       }
-      var res = await sb.from('tareas').insert({
-        titulo: fd.get('titulo').trim(), descripcion: fd.get('descripcion').trim(),
-        assigned_to: fd.get('assignedTo'), categoria: fd.get('categoria'),
-        urgencia: fd.get('urgencia') === 'on', status: 'pendiente',
-        created_by: state.perfil.id, foto_url: fotoUrl, ubicacion_gps: state.tempGps || null
-      }).select().single();
+      var titulo = fd.get('titulo').trim();
+      var descripcion = fd.get('descripcion').trim();
+      var categoria = fd.get('categoria');
+      var urgencia = fd.get('urgencia') === 'on';
+      var loteId = idsSeleccionados.length > 1 ? genId('lote') : null;
+      var filasAInsertar = idsSeleccionados.map(function(id){
+        return {
+          titulo: titulo, descripcion: descripcion, assigned_to: id, categoria: categoria,
+          urgencia: urgencia, status: 'pendiente', created_by: state.perfil.id,
+          foto_url: fotoUrl, ubicacion_gps: state.tempGps || null, lote_id: loteId
+        };
+      });
+      var res = await sb.from('tareas').insert(filasAInsertar).select();
       if(res.error) throw res.error;
-      state.tareas.unshift(res.data);
+      res.data.forEach(function(fila){ state.tareas.unshift(fila); });
       state.tempGps = '';
-      showToast('🚨 Orden generada');
+      showToast(idsSeleccionados.length > 1 ? ('🚨 Orden enviada a ' + idsSeleccionados.length + ' operarios') : '🚨 Orden generada');
     }catch(err){
       state.error = err.message;
       if(btn){ btn.disabled = false; btn.textContent = 'Enviar Orden'; }
@@ -804,6 +817,7 @@
 
   function taskCard(t, isGestor){
     var done = t.status === 'hecho';
+    var companeros = t.lote_id ? state.tareas.filter(function(t2){ return t2.lote_id === t.lote_id && t2.id !== t.id; }) : [];
     var comments = state.comentarios.filter(function(c){ return c.task_id === t.id; });
     var htmlComments = '<div class="comments-section">';
     if(comments.length){
@@ -825,6 +839,7 @@
             ' + (t.urgencia ? '<span class="tag tag-urgente">🚨 Urgente</span>' : '') + '\
           </div>\
         </div>\
+        ' + (companeros.length ? '<div class="hint" style="margin-top:6px;">👥 En grupo con: ' + companeros.map(function(c){ return nombreDe(c.assigned_to); }).join(', ') + '</div>' : '') + '\
         <div style="margin-top:6px;"><span class="tag tag-cat">' + (t.categoria||'General') + '</span></div>\
         ' + (t.descripcion ? '<div class="task-desc">' + t.descripcion + '</div>' : '') + '\
         ' + (t.ubicacion_gps ? '<a href="https://www.google.com/maps/dir/?api=1&destination='+t.ubicacion_gps+'&travelmode=driving" target="_blank" class="gps-badge">📍 Cómo llegar</a>' : '') + '\
@@ -841,8 +856,10 @@
 
   function tareasTabContent(isGestor){
     var tasks = filtrarTareas(state.tareas);
-    var memberOptions = state.usuarios.filter(function(m){ return m.rol === 'secundario' && m.status==='activo'; })
-      .map(function(m){ return '<option value="'+m.id+'">'+m.nombre+'</option>'; }).join('');
+    var miembrosActivos = state.usuarios.filter(function(m){ return m.rol === 'secundario' && m.status==='activo'; });
+    var checkboxesMiembros = miembrosActivos.map(function(m){
+      return '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);"><input type="checkbox" name="assignedTo" value="'+m.id+'" style="width:auto;margin:0;"> '+m.nombre+'</label>';
+    }).join('');
     return '\
       <div class="row" style="margin-bottom:14px;"><button class="btn-ghost btn-sm" style="flex:1;" id="btn-export">📊 Excel (CSV)</button><button class="btn-ghost btn-sm" style="flex:1;" id="btn-export-pdf">📄 PDF con fotos</button></div>\
       <form id="add-task-form" class="card stack" style="margin-bottom:18px;">\
@@ -851,7 +868,10 @@
           <select name="categoria" style="flex:1;"><option>General</option><option>Obras</option><option>Jardinería</option><option>Electricidad</option><option>Agua/Fontanería</option><option>Eventos</option></select>\
           <label style="flex:1; margin:0; display:flex; align-items:center;"><input type="checkbox" name="urgencia"> 🚨 Urgente</label>\
         </div>\
-        <div class="field" style="margin:0;"><select name="assignedTo" required><option value="">-- Asignar Operario --</option>' + memberOptions + '</select></div>\
+        <div class="field" style="margin:0;">\
+          <label>Asignar a (puedes marcar varios)</label>\
+          <div style="max-height:160px;overflow-y:auto;background:var(--surface-alt);border-radius:10px;padding:0 10px;">' + (checkboxesMiembros || '<p class="hint" style="padding:8px 0;">No hay operarios activos.</p>') + '</div>\
+        </div>\
         <div class="field" style="margin:0;"><input name="titulo" placeholder="Qué hay que hacer" required></div>\
         <div class="field" style="margin:0;"><textarea name="descripcion" placeholder="Instrucciones detalladas..."></textarea></div>\
         <div class="row"><button type="button" class="btn-ghost btn-sm" id="btn-gps">📍 GPS</button><input type="file" name="fotoInicial" accept="image/*" style="padding:6px; font-size:12px;flex:1;"></div>\
