@@ -495,6 +495,16 @@
         }
       })
       .subscribe();
+
+    sb.channel('comentarios-en-vivo')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comentarios_tarea' }, function(payload){
+        if(state.comentarios.some(function(c){ return c.id === payload.new.id; })) return;
+        state.comentarios.push(payload.new);
+        // No interrumpimos si hay un modal de cierre/edición abierto, pero el chat de comentarios sí se actualiza al momento
+        if(state.modalCierreTaskId || state.modalEditarTaskId) return;
+        render();
+      })
+      .subscribe();
   }
 
   function logout(){
@@ -804,6 +814,20 @@
       </div>';
   }
 
+  function exportarInventarioExcel(){
+    var cabeceras = ['Artículo', 'Cantidad'];
+    var lineas = [cabeceras.join(',')];
+    state.inventario.forEach(function(i){
+      lineas.push('"' + (i.articulo||'').replace(/"/g,'""') + '",' + i.cantidad);
+    });
+    var blob = new Blob(["\uFEFF" + lineas.join('\n')], {type: 'text/csv;charset=utf-8;'});
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'Inventario_Brigada_Sarinena.csv';
+    link.click();
+    showToast('📊 Inventario exportado');
+  }
+
   function renderInventarioSection(puedeEditar){
     var invList = state.inventario.map(function(i){
       var controls = puedeEditar
@@ -812,7 +836,7 @@
       return '<div class="inv-item"><div class="inv-name">'+i.articulo+'</div><div class="inv-controls">'+controls+'</div></div>';
     }).join('');
     var formAdd = puedeEditar ? '<form id="form-add-inv" class="row" style="margin-bottom:14px;"><input name="articulo" placeholder="Nuevo material" required style="flex:2;"><input name="cantidad" type="number" placeholder="Cant." required style="flex:1;"><button type="submit" class="btn-primary">Añadir</button></form>' : '';
-    return '<div class="card"><h3 style="margin-bottom:14px;font-size:17px;">📦 Inventario</h3>' + formAdd + '<div class="stack" style="gap:8px;">' + (invList || '<p class="empty">Almacén vacío</p>') + '</div></div>';
+    return '<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:14px;"><h3 style="font-size:17px;">📦 Inventario</h3><button class="btn-ghost btn-sm" id="btn-export-inv">📊 Exportar</button></div>' + formAdd + '<div class="stack" style="gap:8px;">' + (invList || '<p class="empty">Almacén vacío</p>') + '</div></div>';
   }
 
   function taskCard(t, isGestor){
@@ -949,12 +973,42 @@
       </div>';
   }
 
+  async function generarCopiaSeguridad(){
+    showToast('💾 Generando copia de seguridad...');
+    try{
+      var perfilesRes = await sb.from('perfiles').select('*');
+      var tareasRes = await sb.from('tareas').select('*');
+      var comentariosRes = await sb.from('comentarios_tarea').select('*');
+      var inventarioRes = await sb.from('inventario').select('*');
+      var notasRes = await sb.from('notas_bloc').select('*');
+
+      var backup = {
+        generado_en: new Date().toISOString(),
+        brigada: BRIGADA_NOMBRE,
+        perfiles: perfilesRes.data || [],
+        tareas: tareasRes.data || [],
+        comentarios_tarea: comentariosRes.data || [],
+        inventario: inventarioRes.data || [],
+        notas_bloc: notasRes.data || []
+      };
+
+      var blob = new Blob([JSON.stringify(backup, null, 2)], {type: 'application/json'});
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'Copia_Seguridad_Brigada_' + new Date().toISOString().slice(0,10) + '.json';
+      link.click();
+      showToast('✅ Copia de seguridad descargada');
+    }catch(err){
+      showToast('⚠️ Error: ' + err.message);
+    }
+  }
+
   function screenAdminHome(){
     var tab = state.principalTab;
     var htmlContent = '';
     if(tab === 'tareas'){ htmlContent = tareasTabContent(true); }
     else if(tab === 'usuarios'){
-      htmlContent = '<div class="ios-list">' + state.usuarios.map(function(u){
+      htmlContent = '<button class="btn-ghost btn-full" id="btn-backup" style="margin-bottom:14px;">💾 Descargar copia de seguridad completa</button><div class="ios-list">' + state.usuarios.map(function(u){
         var opciones = ['administrador','principal','secundario'].map(function(r){
           return '<option value="'+r+'" '+(u.rol===r?'selected':'')+'>'+nombreRol(r)+'</option>';
         }).join('');
@@ -1097,6 +1151,8 @@
 
     var btnExport = document.getElementById('btn-export'); if(btnExport) btnExport.addEventListener('click', exportarAExcel);
     var btnExportPdf = document.getElementById('btn-export-pdf'); if(btnExportPdf) btnExportPdf.addEventListener('click', exportarAPDF);
+    var btnExportInv = document.getElementById('btn-export-inv'); if(btnExportInv) btnExportInv.addEventListener('click', exportarInventarioExcel);
+    var btnBackup = document.getElementById('btn-backup'); if(btnBackup) btnBackup.addEventListener('click', generarCopiaSeguridad);
 
     var lf = document.getElementById('login-form'); if(lf) lf.addEventListener('submit', handleLogin);
     var rf = document.getElementById('register-form'); if(rf) rf.addEventListener('submit', handleRegister);
