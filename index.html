@@ -156,7 +156,7 @@
   var VAPID_PUBLIC_KEY = 'BDGim65cFURiinn9YBihEuRJH-6Oefv3Kj-jn-ZFD6oH0AF1z11Ztj_HMqkmc3xMmRAkptlnrTxCZlH9CRKUQtk';
 
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
 
   var state = {
@@ -172,6 +172,8 @@
     principalTab: 'tareas',   // tareas, usuarios, inventario, bloc
     secondaryTab: 'tareas',   // tareas, inventario, bloc
     authTab: 'login',
+    mostrarOlvide: false,
+    mostrarCuenta: false,
     filtroTareas: 'pendiente',
     filtroFecha: 'todas',
     filtroPersona: '',
@@ -513,6 +515,82 @@
       .subscribe();
   }
 
+  async function handleOlvideContrasena(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var email = fd.get('email').trim();
+    try{
+      var res = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname
+      });
+      if(res.error) throw res.error;
+      showToast('📧 Revisa tu correo: te hemos enviado un enlace para crear una contraseña nueva');
+      state.mostrarOlvide = false;
+      render();
+    }catch(err){
+      showToast('Error: ' + err.message);
+    }
+  }
+
+  async function handleNuevaContrasena(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var nueva = fd.get('password').trim();
+    var confirmar = fd.get('password2').trim();
+    if(nueva !== confirmar){
+      state.error = 'Las dos contraseñas no coinciden.';
+      render();
+      return;
+    }
+    if(nueva.length < 6){
+      state.error = 'La contraseña debe tener al menos 6 caracteres.';
+      render();
+      return;
+    }
+    try{
+      var res = await sb.auth.updateUser({ password: nueva });
+      if(res.error) throw res.error;
+      showToast('✅ Contraseña actualizada. Ya puedes usarla para entrar.');
+      state.error = '';
+      var s = await sb.auth.getSession();
+      if(s.data.session){
+        var perfil = await cargarPerfil(s.data.session.user.id);
+        if(perfil){ await cargarSesionCompleta(perfil); render(); return; }
+      }
+      state.screen = 'auth'; state.authTab = 'login'; render();
+    }catch(err){
+      state.error = err.message;
+      render();
+    }
+  }
+
+  async function handleCambiarContrasena(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var nueva = fd.get('nuevaPassword').trim();
+    if(nueva.length < 6){ showToast('La contraseña debe tener al menos 6 caracteres.'); return; }
+    try{
+      var res = await sb.auth.updateUser({ password: nueva });
+      if(res.error) throw res.error;
+      showToast('✅ Contraseña cambiada correctamente');
+      e.target.reset();
+      state.mostrarCuenta = false; render();
+    }catch(err){ showToast('Error: ' + err.message); }
+  }
+
+  async function handleCambiarEmail(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var nuevo = fd.get('nuevoEmail').trim();
+    try{
+      var res = await sb.auth.updateUser({ email: nuevo });
+      if(res.error) throw res.error;
+      showToast('📧 Revisa tu correo nuevo (y quizá el antiguo) para confirmar el cambio');
+      e.target.reset();
+      state.mostrarCuenta = false; render();
+    }catch(err){ showToast('Error: ' + err.message); }
+  }
+
   function logout(){
     sb.auth.signOut();
     location.reload();
@@ -750,6 +828,13 @@
 
   function screenAuth(){
     var isL = state.authTab === 'login';
+    var formularioOlvide = state.mostrarOlvide ? '\
+      <form id="olvide-form" class="card stack" style="text-align:left;margin-top:10px;">\
+        <p class="hint">Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.</p>\
+        <div class="field" style="margin-bottom:0;"><input name="email" type="email" placeholder="Tu correo" required></div>\
+        <button type="submit" class="btn-primary btn-full">Enviar enlace</button>\
+        <button type="button" class="btn-ghost btn-full" id="btn-cancelar-olvide">Cancelar</button>\
+      </form>' : '';
     return '\
       <div class="screen-scroll">\
         <div class="stack" style="margin-top:40px; text-align:center;">\
@@ -765,6 +850,23 @@
             <div class="field"><input name="email" type="email" placeholder="Correo" required></div>\
             <div class="field" style="margin-bottom:0;"><input name="password" type="password" placeholder="Contraseña" required></div>\
             <button type="submit" class="btn-primary btn-full">' + (isL?'Entrar':'Crear Cuenta') + '</button>\
+          </form>\
+          ' + (isL && !state.mostrarOlvide ? '<button class="link-btn-plain" id="btn-olvide" style="background:none;border:none;color:var(--primary);font-size:13px;margin-top:4px;">¿Olvidaste tu contraseña?</button>' : '') + '\
+          ' + formularioOlvide + '\
+        </div>\
+      </div>';
+  }
+
+  function screenNuevaContrasena(){
+    return '\
+      <div class="screen-scroll">\
+        <div class="stack" style="margin-top:60px; text-align:center;">\
+          <h1 style="font-size:22px;">Crea tu nueva contraseña</h1>\
+          <form id="nueva-contrasena-form" class="card stack" style="text-align:left;">\
+            ' + (state.error ? '<div class="error-msg">'+state.error+'</div>' : '') + '\
+            <div class="field"><label>Nueva contraseña</label><input name="password" type="password" placeholder="Mínimo 6 caracteres" required></div>\
+            <div class="field" style="margin-bottom:0;"><label>Repite la contraseña</label><input name="password2" type="password" required></div>\
+            <button type="submit" class="btn-primary btn-full">Guardar contraseña</button>\
           </form>\
         </div>\
       </div>';
@@ -1014,7 +1116,7 @@
     else if(tab === 'stats'){ htmlContent = renderEstadisticas(); }
 
     return '\
-      <div class="top-header"><div><p class="eyebrow">Jefatura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><button class="logout-link" data-go="logout">Salir</button></div>\
+      <div class="top-header"><div><p class="eyebrow">Jefatura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll">\
         <div class="row" style="margin-bottom:14px;"><button class="btn-ghost btn-sm" style="flex:1;" id="btn-activar-push">🔔 Notificaciones</button><button class="btn-ghost btn-sm" style="flex:1;" id="btn-tema">🌗 Tema</button></div>\
         ' + htmlContent + '\
@@ -1084,7 +1186,7 @@
     else if(tab === 'stats'){ htmlContent = renderEstadisticas(); }
 
     return '\
-      <div class="top-header"><div><p class="eyebrow">Admin</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><button class="logout-link" data-go="logout">Salir</button></div>\
+      <div class="top-header"><div><p class="eyebrow">Admin</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll">\
         <div class="row" style="margin-bottom:14px;"><button class="btn-ghost btn-sm" style="flex:1;" id="btn-activar-push">🔔 Notificaciones</button><button class="btn-ghost btn-sm" style="flex:1;" id="btn-tema">🌗 Tema</button></div>\
         ' + htmlContent + '\
@@ -1125,7 +1227,7 @@
     else if(tab === 'inventario'){ htmlContent = renderInventarioSection(false); }
 
     return '\
-      <div class="top-header"><div><p class="eyebrow">Solo lectura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><button class="logout-link" data-go="logout">Salir</button></div>\
+      <div class="top-header"><div><p class="eyebrow">Solo lectura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll"><p class="hint" style="margin-bottom:10px;">👁 Puedes ver todo, pero no editar ni borrar nada desde esta cuenta.</p>' + htmlContent + '</div>\
       <div class="ios-tabbar">\
         <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">📋</span>Tareas</button>\
@@ -1146,7 +1248,7 @@
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
 
     return '\
-      <div class="top-header"><div><p class="eyebrow">' + BRIGADA_NOMBRE + '</p><div class="company-name">Mi perfil</div></div><button class="logout-link" data-go="logout">Salir</button></div>\
+      <div class="top-header"><div><p class="eyebrow">' + BRIGADA_NOMBRE + '</p><div class="company-name">Mi perfil</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll">' + htmlContent + '</div>\
       <div class="ios-tabbar">\
         <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-sectab="tareas"><span class="tab-icon">📋</span>Tareas</button>\
@@ -1161,6 +1263,7 @@
     var app = document.getElementById('app');
     var html = state.screen === 'loading' ? '<div class="loading-screen">Cargando…</div>'
       : state.screen === 'auth' ? screenAuth()
+      : state.screen === 'nuevaContrasena' ? screenNuevaContrasena()
       : state.screen === 'adminHome' ? screenAdminHome()
       : state.screen === 'principalHome' ? screenPrincipalHome()
       : state.screen === 'lecturaHome' ? screenLecturaHome()
@@ -1189,6 +1292,23 @@
             <div class="row"><button type="button" class="btn-ghost spacer" id="close-editar-modal-btn">Cancelar</button><button type="submit" class="btn-primary spacer">Guardar Cambios</button></div>\
           </form></div>';
       } else { state.modalEditarTaskId = null; }
+    }
+    if(state.mostrarCuenta){
+      html += '\
+        <div class="cierre-form-modal"><div class="card stack" style="width:100%; max-width:400px;">\
+          <div class="row" style="justify-content:space-between;"><h3>Mi cuenta</h3><button id="btn-cerrar-cuenta" style="background:none;border:none;color:var(--ink-soft);font-size:20px;">✕</button></div>\
+          <p class="hint">Cuenta: ' + (state.perfil ? state.perfil.nombre : '') + '</p>\
+          <form id="cambiar-password-form" class="stack" style="border-top:1px solid var(--border);padding-top:12px;">\
+            <label>Cambiar contraseña</label>\
+            <input name="nuevaPassword" type="password" placeholder="Nueva contraseña (mín. 6)" required>\
+            <button type="submit" class="btn-primary btn-full">Guardar contraseña</button>\
+          </form>\
+          <form id="cambiar-email-form" class="stack" style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px;">\
+            <label>Cambiar correo</label>\
+            <input name="nuevoEmail" type="email" placeholder="Nuevo correo" required>\
+            <button type="submit" class="btn-ghost btn-full">Guardar correo</button>\
+          </form>\
+        </div></div>';
     }
     if(state.lightboxUrl){
       html += '<div class="lightbox-overlay" id="lightbox-overlay"><button class="lightbox-close" id="lightbox-close">✕</button><img src="'+state.lightboxUrl+'"></div>';
@@ -1250,6 +1370,14 @@
 
     var lf = document.getElementById('login-form'); if(lf) lf.addEventListener('submit', handleLogin);
     var rf = document.getElementById('register-form'); if(rf) rf.addEventListener('submit', handleRegister);
+    var btnOlvide = document.getElementById('btn-olvide'); if(btnOlvide) btnOlvide.addEventListener('click', function(){ state.mostrarOlvide = true; render(); });
+    var btnCancelarOlvide = document.getElementById('btn-cancelar-olvide'); if(btnCancelarOlvide) btnCancelarOlvide.addEventListener('click', function(){ state.mostrarOlvide = false; render(); });
+    var olvideForm = document.getElementById('olvide-form'); if(olvideForm) olvideForm.addEventListener('submit', handleOlvideContrasena);
+    var nuevaContrasenaForm = document.getElementById('nueva-contrasena-form'); if(nuevaContrasenaForm) nuevaContrasenaForm.addEventListener('submit', handleNuevaContrasena);
+    var cambiarPassForm = document.getElementById('cambiar-password-form'); if(cambiarPassForm) cambiarPassForm.addEventListener('submit', handleCambiarContrasena);
+    var cambiarEmailForm = document.getElementById('cambiar-email-form'); if(cambiarEmailForm) cambiarEmailForm.addEventListener('submit', handleCambiarEmail);
+    var btnCuenta = document.getElementById('btn-mi-cuenta'); if(btnCuenta) btnCuenta.addEventListener('click', function(){ state.mostrarCuenta = !state.mostrarCuenta; render(); });
+    var btnCerrarCuenta = document.getElementById('btn-cerrar-cuenta'); if(btnCerrarCuenta) btnCerrarCuenta.addEventListener('click', function(){ state.mostrarCuenta = false; render(); });
     var atf = document.getElementById('add-task-form'); if(atf) atf.addEventListener('submit', handleAddTask);
     var mcf = document.getElementById('modal-cierre-form'); if(mcf) mcf.addEventListener('submit', handleCerrarTarea);
     var cmb = document.getElementById('close-modal-btn'); if(cmb) cmb.addEventListener('click', function(){ state.modalCierreTaskId = null; render(); });
@@ -1283,6 +1411,7 @@
     if(fotoDespues && fotoDespues.files && fotoDespues.files.length > 0) return true;
     if(state.modalCierreTaskId) return true;
     if(state.modalEditarTaskId) return true;
+    if(state.mostrarCuenta) return true;
     return false;
   }
 
@@ -1294,6 +1423,13 @@
   }
   document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible'){ refrescarAlVolver(); } });
   window.addEventListener('focus', refrescarAlVolver);
+
+  sb.auth.onAuthStateChange(function(event, session){
+    if(event === 'PASSWORD_RECOVERY'){
+      state.screen = 'nuevaContrasena';
+      render();
+    }
+  });
 
   render(); init();
 })();
