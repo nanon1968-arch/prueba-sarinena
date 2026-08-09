@@ -150,6 +150,7 @@
 <script>
 (function(){
   var BRIGADA_NOMBRE = 'Brigada de Sariñena';
+  var LOCALIDADES = ['Sariñena', 'La Cartuja de Monegros', 'San Juan del Flumen', 'Pallaruelo', 'Lastanosa', 'Lamasadera'];
   var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_WIsoROQk7m6rQVcdgB7wRw_1nOFTlfD';
   var FOTOS_BUCKET = 'tareas-fotos';
@@ -712,19 +713,42 @@
         state.busy = false; if(btn){ btn.disabled=false; btn.textContent='Cerrar Tarea'; } render();
         return;
       }
+
+      // Recoger el material usado marcado en el formulario
+      var materialesUsados = [];
+      state.inventario.forEach(function(item){
+        var cantidadUsada = parseInt(fd.get('mat_' + item.id)) || 0;
+        if(cantidadUsada > 0){
+          materialesUsados.push({ inventario_id: item.id, articulo: item.articulo, poblacion: item.poblacion || null, cantidad: cantidadUsada });
+        }
+      });
+
       var res = await sb.from('tareas').update({
         status: 'hecho', notas_cierre: fd.get('notasCierre'), foto_despues_url: fotoUrl,
-        cerrado_en: new Date().toISOString(), cerrado_por: state.perfil.id
+        cerrado_en: new Date().toISOString(), cerrado_por: state.perfil.id,
+        materiales_usados: materialesUsados
       }).eq('id', state.modalCierreTaskId).select().single();
       if(res.error){
         showToast('⚠️ Error: ' + res.error.message);
         state.busy = false; if(btn){ btn.disabled=false; btn.textContent='Cerrar Tarea'; } render();
         return;
       }
+
+      // Descontar del inventario lo que se ha usado
+      for(var mi=0; mi<materialesUsados.length; mi++){
+        var mu = materialesUsados[mi];
+        var itemInv = state.inventario.find(function(x){ return x.id === mu.inventario_id; });
+        if(itemInv){
+          var nuevaCantidad = Math.max(0, itemInv.cantidad - mu.cantidad);
+          await sb.from('inventario').update({ cantidad: nuevaCantidad }).eq('id', mu.inventario_id);
+          itemInv.cantidad = nuevaCantidad;
+        }
+      }
+
       var idx = state.tareas.findIndex(function(t){ return t.id === state.modalCierreTaskId; });
       if(idx !== -1) state.tareas[idx] = res.data;
       state.modalCierreTaskId = null;
-      showToast('✔️ Tarea Finalizada' + (res.data.foto_despues_url ? ' (con foto)' : ''));
+      showToast('✔️ Tarea Finalizada' + (res.data.foto_despues_url ? ' (con foto)' : '') + (materialesUsados.length ? (' — ' + materialesUsados.length + ' materiales descontados') : ''));
     } catch(err) {
       showToast(err.message);
       if(btn){ btn.disabled = false; btn.textContent = 'Cerrar Tarea'; }
@@ -745,9 +769,10 @@
     e.preventDefault();
     var input = e.target.querySelector('input[name="articulo"]');
     var num = e.target.querySelector('input[name="cantidad"]');
+    var pobl = e.target.querySelector('input[name="poblacion"]');
     try{
-      var res = await sb.from('inventario').insert({ articulo: input.value, cantidad: parseInt(num.value)||0 }).select().single();
-      if(!res.error){ state.inventario.push(res.data); state.inventario.sort(function(a,b){return a.articulo.localeCompare(b.articulo);}); input.value=''; num.value=''; render(); }
+      var res = await sb.from('inventario').insert({ articulo: input.value, cantidad: parseInt(num.value)||0, poblacion: pobl.value.trim() || null }).select().single();
+      if(!res.error){ state.inventario.push(res.data); state.inventario.sort(function(a,b){return a.articulo.localeCompare(b.articulo);}); input.value=''; num.value=''; pobl.value=''; render(); }
     }catch(err){ showToast('Error'); }
   }
 
@@ -938,10 +963,13 @@
   }
 
   function exportarInventarioExcel(){
-    var cabeceras = ['Artículo', 'Cantidad'];
+    var cabeceras = ['Artículo', 'Cantidad', 'Población'];
     var lineas = [cabeceras.join(',')];
-    state.inventario.forEach(function(i){
-      lineas.push('"' + (i.articulo||'').replace(/"/g,'""') + '",' + i.cantidad);
+    var ordenado = state.inventario.slice().sort(function(a,b){
+      return (a.poblacion||'').localeCompare(b.poblacion||'') || a.articulo.localeCompare(b.articulo);
+    });
+    ordenado.forEach(function(i){
+      lineas.push('"' + (i.articulo||'').replace(/"/g,'""') + '",' + i.cantidad + ',"' + (i.poblacion||'').replace(/"/g,'""') + '"');
     });
     var blob = new Blob(["\uFEFF" + lineas.join('\n')], {type: 'text/csv;charset=utf-8;'});
     var link = document.createElement('a');
@@ -951,15 +979,35 @@
     showToast('📊 Inventario exportado');
   }
 
+  function renderMaterialUsadoModal(){
+    if(state.inventario.length === 0) return '';
+    var filas = state.inventario.filter(function(i){ return i.cantidad > 0; }).map(function(i){
+      return '\
+        <div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">\
+          <div style="flex:1;"><div style="font-size:13.5px;">'+i.articulo+'</div><div class="hint">'+(i.poblacion||'sin población')+' · quedan '+i.cantidad+'</div></div>\
+          <input type="number" name="mat_'+i.id+'" min="0" max="'+i.cantidad+'" placeholder="0" style="width:70px;text-align:center;padding:8px 4px;">\
+        </div>';
+    }).join('');
+    return '<div class="field"><label>Material usado (opcional)</label><div style="max-height:180px;overflow-y:auto;background:var(--surface-alt);border-radius:10px;padding:4px 10px;">' + filas + '</div></div>';
+  }
+
   function renderInventarioSection(puedeEditar){
-    var invList = state.inventario.map(function(i){
+    function itemHtml(i){
       var controls = puedeEditar
         ? '<button class="inv-btn" data-inv-id="'+i.id+'" data-inv-val="-1">-</button><span style="font-family:var(--font-mono); font-weight:bold; width:30px; text-align:center;">'+i.cantidad+'</span><button class="inv-btn" data-inv-id="'+i.id+'" data-inv-val="1">+</button>'
         : '<span style="font-family:var(--font-mono); font-size:17px; font-weight:bold;">'+i.cantidad+' uds</span>';
       return '<div class="inv-item"><div class="inv-name">'+i.articulo+'</div><div class="inv-controls">'+controls+'</div></div>';
-    }).join('');
-    var formAdd = puedeEditar ? '<form id="form-add-inv" class="row" style="margin-bottom:14px;"><input name="articulo" placeholder="Nuevo material" required style="flex:2;"><input name="cantidad" type="number" placeholder="Cant." required style="flex:1;"><button type="submit" class="btn-primary">Añadir</button></form>' : '';
-    return '<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:14px;"><h3 style="font-size:17px;">📦 Inventario</h3><button class="btn-ghost btn-sm" id="btn-export-inv">📊 Exportar</button></div>' + formAdd + '<div class="stack" style="gap:8px;">' + (invList || '<p class="empty">Almacén vacío</p>') + '</div></div>';
+    }
+    var gruposHtml = '';
+    var gruposLocalidades = LOCALIDADES.concat(['Sin población asignada']);
+    gruposLocalidades.forEach(function(loc){
+      var items = state.inventario.filter(function(i){ return loc === 'Sin población asignada' ? !i.poblacion : i.poblacion === loc; });
+      if(items.length === 0) return;
+      gruposHtml += '<p class="eyebrow" style="margin-top:14px;">📍 ' + loc + '</p><div class="stack" style="gap:8px;">' + items.map(itemHtml).join('') + '</div>';
+    });
+    if(!gruposHtml){ gruposHtml = '<p class="empty">Almacén vacío</p>'; }
+    var formAdd = puedeEditar ? '<form id="form-add-inv" class="stack" style="margin-bottom:14px;"><div class="row"><input name="articulo" placeholder="Nuevo material" required style="flex:2;"><input name="cantidad" type="number" placeholder="Cant." required style="flex:1;"></div><div class="row"><select name="poblacion" style="flex:1;"><option value="">-- Población --</option>' + LOCALIDADES.map(function(loc){ return '<option>'+loc+'</option>'; }).join('') + '</select><button type="submit" class="btn-primary">Añadir</button></div></form>' : '';
+    return '<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:14px;"><h3 style="font-size:17px;">📦 Inventario</h3><button class="btn-ghost btn-sm" id="btn-export-inv">📊 Exportar</button></div>' + formAdd + gruposHtml + '</div>';
   }
 
   function taskCard(t, isGestor, soloLectura){
@@ -994,6 +1042,7 @@
         ' + (t.foto_url ? '<img class="task-photo" src="'+t.foto_url+'" data-lightbox="'+t.foto_url+'">' : '') + '\
         ' + (done && t.foto_despues_url ? '<div><div class="hint" style="color:var(--green);margin-top:8px;">📷 Foto de cierre de ' + nombreDe(t.cerrado_por) + '</div><img class="task-photo" src="'+t.foto_despues_url+'" data-lightbox="'+t.foto_despues_url+'"></div>' : '') + '\
         ' + (done && t.notas_cierre ? '<div class="task-meta" style="background:var(--primary-light); color:var(--ink);"><b>Parte Final:</b> ' + t.notas_cierre + '</div>' : '') + '\
+        ' + (done && t.materiales_usados && t.materiales_usados.length ? '<div class="task-meta"><b>📦 Material usado:</b><br>' + t.materiales_usados.map(function(m){ return '• ' + m.cantidad + ' × ' + m.articulo + (m.poblacion ? (' ('+m.poblacion+')') : ''); }).join('<br>') + '</div>' : '') + '\
         ' + m + htmlComments + '\
         ' + (soloLectura ? '' : ('\
         <div class="task-actions">\
@@ -1270,7 +1319,7 @@
       : screenSecondaryHome();
 
     if(state.modalCierreTaskId){
-      html += '<div class="cierre-form-modal"><form id="modal-cierre-form" class="card stack" style="width:100%; max-width:400px;"><h3>Finalizar Tarea</h3><div class="field"><label>Parte de cierre</label><textarea name="notasCierre" required></textarea></div><div class="field"><label>Foto del resultado (Opcional)</label><input type="file" name="fotoDespues" accept="image/*"></div><div class="row"><button type="button" class="btn-ghost spacer" id="close-modal-btn">Cancelar</button><button type="submit" class="btn-primary spacer">Cerrar Tarea</button></div></form></div>';
+      html += '<div class="cierre-form-modal"><form id="modal-cierre-form" class="card stack" style="width:100%; max-width:400px; max-height:85vh; overflow-y:auto;"><h3>Finalizar Tarea</h3><div class="field"><label>Parte de cierre</label><textarea name="notasCierre" required></textarea></div><div class="field"><label>Foto del resultado (Opcional)</label><input type="file" name="fotoDespues" accept="image/*"></div>' + renderMaterialUsadoModal() + '<div class="row"><button type="button" class="btn-ghost spacer" id="close-modal-btn">Cancelar</button><button type="submit" class="btn-primary spacer">Cerrar Tarea</button></div></form></div>';
     }
     if(state.modalEditarTaskId){
       var tEdit = state.tareas.find(function(x){ return x.id === state.modalEditarTaskId; });
