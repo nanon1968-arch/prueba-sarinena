@@ -337,11 +337,11 @@
 
   function exportarAExcel() {
     var cabeceras = ["ID", "Título", "Categoría", "Urgencia", "Asignado a", "Estado", "Fecha Creación", "Cierre", "Notas Cierre"];
-    var lineas = [cabeceras.join(",")];
+    var lineas = [cabeceras.join(";")];
     filtrarTareas(state.tareas).forEach(function(t) {
       var linea = [t.id, '"' + (t.titulo||'').replace(/"/g,'""') + '"', t.categoria || 'General', t.urgencia ? 'URGENTE' : 'Normal',
         '"' + nombreDe(t.assigned_to) + '"', t.status, t.created_at, t.cerrado_en || '', '"' + (t.notas_cierre||'').replace(/"/g,'""') + '"'];
-      lineas.push(linea.join(","));
+      lineas.push(linea.join(";"));
     });
     var blob = new Blob(["\uFEFF" + lineas.join("\n")], {type: "text/csv;charset=utf-8;"});
     var link = document.createElement("a");
@@ -964,12 +964,12 @@
 
   function exportarInventarioExcel(){
     var cabeceras = ['Artículo', 'Cantidad', 'Población'];
-    var lineas = [cabeceras.join(',')];
+    var lineas = [cabeceras.join(';')];
     var ordenado = state.inventario.slice().sort(function(a,b){
       return (a.poblacion||'').localeCompare(b.poblacion||'') || a.articulo.localeCompare(b.articulo);
     });
     ordenado.forEach(function(i){
-      lineas.push('"' + (i.articulo||'').replace(/"/g,'""') + '",' + i.cantidad + ',"' + (i.poblacion||'').replace(/"/g,'""') + '"');
+      lineas.push('"' + (i.articulo||'').replace(/"/g,'""') + '";' + i.cantidad + ';"' + (i.poblacion||'').replace(/"/g,'""') + '"');
     });
     var blob = new Blob(["\uFEFF" + lineas.join('\n')], {type: 'text/csv;charset=utf-8;'});
     var link = document.createElement('a');
