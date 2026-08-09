@@ -999,14 +999,21 @@
       return '<div class="inv-item"><div class="inv-name">'+i.articulo+'</div><div class="inv-controls">'+controls+'</div></div>';
     }
     var gruposHtml = '';
-    var gruposLocalidades = LOCALIDADES.concat(['Sin población asignada']);
+    var otrasLocalidades = [];
+    state.inventario.forEach(function(i){
+      if(i.poblacion && LOCALIDADES.indexOf(i.poblacion) === -1 && otrasLocalidades.indexOf(i.poblacion) === -1){
+        otrasLocalidades.push(i.poblacion);
+      }
+    });
+    var gruposLocalidades = LOCALIDADES.concat(otrasLocalidades.sort()).concat(['Sin población asignada']);
     gruposLocalidades.forEach(function(loc){
       var items = state.inventario.filter(function(i){ return loc === 'Sin población asignada' ? !i.poblacion : i.poblacion === loc; });
       if(items.length === 0) return;
       gruposHtml += '<p class="eyebrow" style="margin-top:14px;">📍 ' + loc + '</p><div class="stack" style="gap:8px;">' + items.map(itemHtml).join('') + '</div>';
     });
     if(!gruposHtml){ gruposHtml = '<p class="empty">Almacén vacío</p>'; }
-    var formAdd = puedeEditar ? '<form id="form-add-inv" class="stack" style="margin-bottom:14px;"><div class="row"><input name="articulo" placeholder="Nuevo material" required style="flex:2;"><input name="cantidad" type="number" placeholder="Cant." required style="flex:1;"></div><div class="row"><select name="poblacion" style="flex:1;"><option value="">-- Población --</option>' + LOCALIDADES.map(function(loc){ return '<option>'+loc+'</option>'; }).join('') + '</select><button type="submit" class="btn-primary">Añadir</button></div></form>' : '';
+    var datalistLocalidades = '<datalist id="lista-localidades">' + LOCALIDADES.map(function(loc){ return '<option value="'+loc+'">'; }).join('') + '</datalist>';
+    var formAdd = puedeEditar ? '<form id="form-add-inv" class="stack" style="margin-bottom:14px;"><div class="row"><input name="articulo" placeholder="Nuevo material" required style="flex:2;"><input name="cantidad" type="number" placeholder="Cant." required style="flex:1;"></div><div class="row"><input name="poblacion" list="lista-localidades" placeholder="Población (elige o escribe otra)" style="flex:1;"><button type="submit" class="btn-primary">Añadir</button></div>' + datalistLocalidades + '</form>' : '';
     return '<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:14px;"><h3 style="font-size:17px;">📦 Inventario</h3><button class="btn-ghost btn-sm" id="btn-export-inv">📊 Exportar</button></div>' + formAdd + gruposHtml + '</div>';
   }
 
