@@ -167,12 +167,14 @@
     comentarios: [],
     inventario: [],
     apuntesBloc: [],
+    historial: [],
     error: '', toast: '', busy: false,
     principalTab: 'tareas',   // tareas, usuarios, inventario, bloc
     secondaryTab: 'tareas',   // tareas, inventario, bloc
     authTab: 'login',
     filtroTareas: 'pendiente',
     filtroFecha: 'todas',
+    filtroPersona: '',
     busquedaTareas: '',
     modalCierreTaskId: null,
     modalEditarTaskId: null,
@@ -206,6 +208,8 @@
     if(!resC.error) state.comentarios = resC.data || [];
     var resI = await sb.from('inventario').select('*').order('articulo', {ascending:true});
     if(!resI.error) state.inventario = resI.data || [];
+    var resH = await sb.from('historial_cambios').select('*').order('created_at', {ascending:false}).limit(50);
+    if(!resH.error) state.historial = resH.data || [];
   }
 
   async function cargarPerfil(userId){
@@ -347,12 +351,14 @@
   function nombreRol(rol){
     if(rol === 'administrador') return 'Admin';
     if(rol === 'principal') return 'Jefatura';
+    if(rol === 'lectura') return 'Lectura';
     return 'Miembro';
   }
 
   function pantallaSegunRol(rol){
     if(rol === 'administrador') return 'adminHome';
     if(rol === 'principal') return 'principalHome';
+    if(rol === 'lectura') return 'lecturaHome';
     return 'secondaryHome';
   }
 
@@ -585,12 +591,25 @@
       if(res.error) throw res.error;
       var idx = state.tareas.findIndex(function(t){ return t.id === state.modalEditarTaskId; });
       if(idx !== -1) state.tareas[idx] = res.data;
+      await sb.from('historial_cambios').insert({ tarea_id: res.data.id, tarea_titulo: res.data.titulo, accion: 'editada', usuario_id: state.perfil.id, detalle: 'Datos de la tarea modificados' });
       state.modalEditarTaskId = null;
       showToast('✏️ Tarea actualizada');
     }catch(err){
       showToast('Error: ' + err.message);
     }
     render();
+  }
+
+  async function restaurarTarea(id){
+    try{
+      var res = await sb.from('tareas').update({ eliminado_en: null, eliminado_por: null }).eq('id', id).select().single();
+      if(res.error) throw res.error;
+      var idx = state.tareas.findIndex(function(t){ return t.id === id; });
+      if(idx !== -1) state.tareas[idx] = res.data;
+      await sb.from('historial_cambios').insert({ tarea_id: id, tarea_titulo: res.data.titulo, accion: 'restaurada', usuario_id: state.perfil.id, detalle: 'Recuperada de la papelera' });
+      showToast('♻️ Tarea restaurada');
+      render();
+    }catch(err){ showToast('Error: ' + err.message); }
   }
 
   async function handleCerrarTarea(e){
@@ -771,10 +790,12 @@
   function filtrarTareas(lista){
     var texto = state.busquedaTareas.trim().toLowerCase();
     return lista.filter(function(t){
+      var pasaEliminado = !t.eliminado_en;
       var pasaEstado = state.filtroTareas === 'todos' || t.status === state.filtroTareas;
       var pasaFecha = tareaCumpleFecha(t);
       var pasaTexto = !texto || (t.titulo && t.titulo.toLowerCase().indexOf(texto) !== -1) || (t.descripcion && t.descripcion.toLowerCase().indexOf(texto) !== -1);
-      return pasaEstado && pasaFecha && pasaTexto;
+      var pasaPersona = !state.filtroPersona || t.assigned_to === state.filtroPersona;
+      return pasaEliminado && pasaEstado && pasaFecha && pasaTexto && pasaPersona;
     });
   }
 
@@ -839,7 +860,7 @@
     return '<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:14px;"><h3 style="font-size:17px;">📦 Inventario</h3><button class="btn-ghost btn-sm" id="btn-export-inv">📊 Exportar</button></div>' + formAdd + '<div class="stack" style="gap:8px;">' + (invList || '<p class="empty">Almacén vacío</p>') + '</div></div>';
   }
 
-  function taskCard(t, isGestor){
+  function taskCard(t, isGestor, soloLectura){
     var done = t.status === 'hecho';
     var companeros = t.lote_id ? state.tareas.filter(function(t2){ return t2.lote_id === t.lote_id && t2.id !== t.id; }) : [];
     var comments = state.comentarios.filter(function(c){ return c.task_id === t.id; });
@@ -847,11 +868,12 @@
     if(comments.length){
       htmlComments += comments.map(function(c){ return '<div class="comment-item"><div class="comment-author">'+nombreDe(c.user_id)+'</div><div>'+c.texto+'</div></div>'; }).join('');
     }
-    if(!done){
+    if(!done && !soloLectura){
       htmlComments += '<form class="row form-comentario" data-task="'+t.id+'" style="margin-top:8px;"><input name="texto" placeholder="Escribir un comentario..." style="padding:8px 12px; font-size:13px;" required><button type="submit" class="btn-ghost btn-sm">💬</button></form>';
     }
     htmlComments += '</div>';
     var m = '<div class="task-meta"><b>Asignado a:</b> ' + nombreDe(t.assigned_to) + '<br><b>Creado:</b> ' + formatFecha(t.created_at);
+    if(isGestor && !done){ m += '<br><b>Visto:</b> ' + (t.visto_en ? ('👁 sí, ' + formatFecha(t.visto_en)) : '⚪ todavía no'); }
     if(done && t.cerrado_en) m += '<br><b>Cerrado:</b> ' + formatFecha(t.cerrado_en) + ' (por ' + nombreDe(t.cerrado_por) + ')';
     m += '</div>';
     return '\
@@ -871,10 +893,11 @@
         ' + (done && t.foto_despues_url ? '<div><div class="hint" style="color:var(--green);margin-top:8px;">📷 Foto de cierre de ' + nombreDe(t.cerrado_por) + '</div><img class="task-photo" src="'+t.foto_despues_url+'" data-lightbox="'+t.foto_despues_url+'"></div>' : '') + '\
         ' + (done && t.notas_cierre ? '<div class="task-meta" style="background:var(--primary-light); color:var(--ink);"><b>Parte Final:</b> ' + t.notas_cierre + '</div>' : '') + '\
         ' + m + htmlComments + '\
+        ' + (soloLectura ? '' : ('\
         <div class="task-actions">\
           ' + (!done ? '<button class="btn-primary btn-sm" data-action-complete="'+t.id+'">✔️ Finalizar Parte</button>' : '<button class="btn-ghost btn-sm" data-action-reabrir="'+t.id+'">🔄 Reabrir</button>') + '\
           ' + (isGestor ? '<button class="btn-ghost btn-sm" data-task-editar="'+t.id+'">✏️ Editar</button><button class="btn-danger-ghost btn-sm" data-task-remove="'+t.id+'">Eliminar</button>' : '') + '\
-        </div>\
+        </div>')) + '\
       </div>';
   }
 
@@ -901,6 +924,7 @@
         <div class="row"><button type="button" class="btn-ghost btn-sm" id="btn-gps">📍 GPS</button><input type="file" name="fotoInicial" accept="image/*" style="padding:6px; font-size:12px;flex:1;"></div>\
         <button type="submit" class="btn-primary btn-full">Enviar Orden</button>\
       </form>\
+      ' + (isGestor ? ('<select id="filtro-persona" style="margin-bottom:10px;"><option value="">👤 Todos los operarios</option>' + miembrosActivos.map(function(m){ return '<option value="'+m.id+'" '+(state.filtroPersona===m.id?'selected':'')+'>'+m.nombre+'</option>'; }).join('') + '</select>') : '') + '\
       ' + renderFilterBar() + '<div class="grid">' + (tasks.length ? tasks.map(function(t){return taskCard(t,isGestor);}).join('') : '<div class="empty">No hay órdenes.</div>') + '</div>';
   }
 
@@ -941,7 +965,38 @@
         <div class="hint">tareas totales · '+cerradasGeneral+' finalizadas ('+(totalGeneral ? Math.round(cerradasGeneral/totalGeneral*100) : 0)+'%)</div>\
       </div>\
       <p class="eyebrow">Por operario</p>\
-      <div class="ios-list">'+filasHtml+'</div>';
+      <div class="ios-list">'+filasHtml+'</div>\
+      ' + renderPapelera() + '\
+      ' + renderHistorial() + '';
+  }
+
+  function renderPapelera(){
+    var eliminadas = state.tareas.filter(function(t){ return t.eliminado_en; });
+    var lista = eliminadas.map(function(t){
+      return '\
+        <div class="ios-row">\
+          <div class="ios-row-main">\
+            <div class="ios-row-title">'+t.titulo+'</div>\
+            <div class="ios-row-sub">Asignada a '+nombreDe(t.assigned_to)+' · eliminada '+formatFecha(t.eliminado_en)+' por '+nombreDe(t.eliminado_por)+'</div>\
+          </div>\
+          <button class="btn-ghost btn-sm" data-restaurar-tarea="'+t.id+'">♻️ Restaurar</button>\
+        </div>';
+    }).join('') || '<div class="ios-row"><span class="empty">La papelera está vacía.</span></div>';
+    return '<p class="eyebrow" style="margin-top:22px;">🗑 Papelera (' + eliminadas.length + ')</p><div class="ios-list">' + lista + '</div>';
+  }
+
+  function renderHistorial(){
+    var lista = (state.historial || []).slice(0, 30).map(function(h){
+      var iconos = { editada: '✏️', eliminada: '🗑', restaurada: '♻️' };
+      return '\
+        <div class="ios-row">\
+          <div class="ios-row-main">\
+            <div class="ios-row-title">'+(iconos[h.accion]||'•')+' '+(h.tarea_titulo||'(tarea)')+'</div>\
+            <div class="ios-row-sub">'+nombreDe(h.usuario_id)+' · '+formatFecha(h.created_at)+(h.detalle ? (' · '+h.detalle) : '')+'</div>\
+          </div>\
+        </div>';
+    }).join('') || '<div class="ios-row"><span class="empty">Sin actividad registrada todavía.</span></div>';
+    return '<p class="eyebrow" style="margin-top:22px;">📜 Historial de cambios</p><div class="ios-list">' + lista + '</div>';
   }
 
   function screenPrincipalHome(){
@@ -1009,7 +1064,7 @@
     if(tab === 'tareas'){ htmlContent = tareasTabContent(true); }
     else if(tab === 'usuarios'){
       htmlContent = '<button class="btn-ghost btn-full" id="btn-backup" style="margin-bottom:14px;">💾 Descargar copia de seguridad completa</button><div class="ios-list">' + state.usuarios.map(function(u){
-        var opciones = ['administrador','principal','secundario'].map(function(r){
+        var opciones = ['administrador','principal','secundario','lectura'].map(function(r){
           return '<option value="'+r+'" '+(u.rol===r?'selected':'')+'>'+nombreRol(r)+'</option>';
         }).join('');
         return '\
@@ -1052,10 +1107,38 @@
       </div>';
   }
 
+  function marcarVistasSiHaceFalta(tasks){
+    var noVistas = tasks.filter(function(t){ return !t.visto_en; });
+    if(noVistas.length === 0) return;
+    noVistas.forEach(function(t){ t.visto_en = new Date().toISOString(); }); // optimista, evita repetir la llamada
+    var ids = noVistas.map(function(t){ return t.id; });
+    sb.from('tareas').update({ visto_en: new Date().toISOString() }).in('id', ids).then(function(){});
+  }
+
+  function screenLecturaHome(){
+    var tab = state.principalTab;
+    var htmlContent = '';
+    if(tab === 'tareas'){
+      var tasks = filtrarTareas(state.tareas);
+      htmlContent = renderFilterBar() + '<div class="grid">' + (tasks.length ? tasks.map(function(t){ return taskCard(t, false, true); }).join('') : '<div class="empty">No hay tareas.</div>') + '</div>';
+    } else if(tab === 'stats'){ htmlContent = renderEstadisticas(); }
+    else if(tab === 'inventario'){ htmlContent = renderInventarioSection(false); }
+
+    return '\
+      <div class="top-header"><div><p class="eyebrow">Solo lectura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><button class="logout-link" data-go="logout">Salir</button></div>\
+      <div class="screen-scroll"><p class="hint" style="margin-bottom:10px;">👁 Puedes ver todo, pero no editar ni borrar nada desde esta cuenta.</p>' + htmlContent + '</div>\
+      <div class="ios-tabbar">\
+        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">📋</span>Tareas</button>\
+        <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">📈</span>Stats</button>\
+        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">📦</span>Stock</button>\
+      </div>';
+  }
+
   function screenSecondaryHome(){
     var u = state.perfil;
     var tab = state.secondaryTab;
     var tasks = filtrarTareas(state.tareas.filter(function(t){ return t.assigned_to === u.id; }));
+    if(tab === 'tareas'){ marcarVistasSiHaceFalta(tasks.filter(function(t){ return t.status === 'pendiente'; })); }
     var htmlContent = '';
     if(tab === 'tareas'){
       htmlContent = badgeCard(u) + '<div style="margin:12px 0;"><button class="btn-ghost btn-full" data-toggle-disp>Cambiar a '+(u.disponible?'Ocupado':'Disponible')+'</button><button class="btn-ghost btn-full" id="btn-activar-push" style="margin-top:8px;">🔔 Activar notificaciones</button><button class="btn-ghost btn-full" id="btn-tema" style="margin-top:8px;">🌗 Cambiar tema</button></div>' + renderFilterBar() + '<div class="grid">' + (tasks.length ? tasks.map(function(t){return taskCard(t,false);}).join('') : '<div class="empty">Sin tareas asignadas.</div>') + '</div>';
@@ -1080,6 +1163,7 @@
       : state.screen === 'auth' ? screenAuth()
       : state.screen === 'adminHome' ? screenAdminHome()
       : state.screen === 'principalHome' ? screenPrincipalHome()
+      : state.screen === 'lecturaHome' ? screenLecturaHome()
       : screenSecondaryHome();
 
     if(state.modalCierreTaskId){
@@ -1122,6 +1206,8 @@
     app.querySelectorAll('[data-authtab]').forEach(function(n){ n.addEventListener('click', function(){ state.authTab = n.getAttribute('data-authtab'); state.error=''; render(); }); });
     app.querySelectorAll('[data-filter]').forEach(function(n){ n.addEventListener('click', function(){ state.filtroTareas = n.getAttribute('data-filter'); render(); }); });
     app.querySelectorAll('[data-fecha]').forEach(function(n){ n.addEventListener('click', function(){ state.filtroFecha = n.getAttribute('data-fecha'); render(); }); });
+    var filtroPersonaSel = document.getElementById('filtro-persona');
+    if(filtroPersonaSel){ filtroPersonaSel.addEventListener('change', function(){ state.filtroPersona = filtroPersonaSel.value; render(); }); }
     var buscador = document.getElementById('buscador-tareas');
     if(buscador){
       buscador.addEventListener('input', function(){
@@ -1138,7 +1224,14 @@
       await cargarDatosGlobales(); render(); showToast("Tarea Reabierta");
     }); });
     app.querySelectorAll('[data-task-remove]').forEach(function(n){ n.addEventListener('click', async function(){
-      if(confirm('¿Borrar tarea?')){ await sb.from('tareas').delete().eq('id', n.getAttribute('data-task-remove')); await cargarDatosGlobales(); render(); }
+      if(confirm('¿Enviar esta tarea a la papelera?')){
+        var id = n.getAttribute('data-task-remove');
+        var tarea = state.tareas.find(function(t){ return t.id === id; });
+        await sb.from('tareas').update({ eliminado_en: new Date().toISOString(), eliminado_por: state.perfil.id }).eq('id', id);
+        await sb.from('historial_cambios').insert({ tarea_id: id, tarea_titulo: tarea ? tarea.titulo : '', accion: 'eliminada', usuario_id: state.perfil.id, detalle: 'Enviada a la papelera' });
+        await cargarDatosGlobales(); render();
+        showToast('🗑 Enviada a la papelera');
+      }
     }); });
 
     app.querySelectorAll('.form-comentario').forEach(function(f){ f.addEventListener('submit', function(e){ handleAddComentario(e, f.getAttribute('data-task')); }); });
@@ -1153,6 +1246,7 @@
     var btnExportPdf = document.getElementById('btn-export-pdf'); if(btnExportPdf) btnExportPdf.addEventListener('click', exportarAPDF);
     var btnExportInv = document.getElementById('btn-export-inv'); if(btnExportInv) btnExportInv.addEventListener('click', exportarInventarioExcel);
     var btnBackup = document.getElementById('btn-backup'); if(btnBackup) btnBackup.addEventListener('click', generarCopiaSeguridad);
+    app.querySelectorAll('[data-restaurar-tarea]').forEach(function(n){ n.addEventListener('click', function(){ restaurarTarea(n.getAttribute('data-restaurar-tarea')); }); });
 
     var lf = document.getElementById('login-form'); if(lf) lf.addEventListener('submit', handleLogin);
     var rf = document.getElementById('register-form'); if(rf) rf.addEventListener('submit', handleRegister);
