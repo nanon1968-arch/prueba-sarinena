@@ -14,6 +14,7 @@
 <meta name="apple-mobile-web-app-title" content="Brigada">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     /* Estilo iOS (modo oscuro nativo de Apple) */
@@ -98,7 +99,10 @@
 
   .toast{position:fixed;bottom:calc(var(--tabbar-h) + 16px);left:50%;transform:translateX(-50%);background:var(--surface-alt);color:#fff;padding:12px 18px;border-radius:100px;font-size:13.5px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:150;max-width:90%;text-align:center;border:1px solid var(--border);}
 
-  .loading-screen{flex:1;display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-family:var(--font-mono);font-size:13px;}
+  .loading-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--ink-soft);gap:14px;}
+  .loading-screen img{width:88px;height:88px;border-radius:22px;}
+  .loading-screen .loading-text{font-family:var(--font-mono);font-size:12.5px;}
+  .app-footer{text-align:center;font-size:11px;color:var(--ink-soft);margin-top:24px;font-family:var(--font-mono);}
 
   /* Barra de pestañas inferior, estilo iOS */
   .ios-tabbar{
@@ -151,6 +155,7 @@
 (function(){
   var BRIGADA_NOMBRE = 'Brigada de Sariñena';
   var LOCALIDADES = ['Sariñena', 'La Cartuja de Monegros', 'San Juan del Flumen', 'Pallaruelo', 'Lastanosa', 'Lamasadera'];
+  var APP_VERSION = '1.0';
   var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_WIsoROQk7m6rQVcdgB7wRw_1nOFTlfD';
   var FOTOS_BUCKET = 'tareas-fotos';
@@ -336,19 +341,24 @@
   }
 
   function exportarAExcel() {
-    var cabeceras = ["ID", "Título", "Categoría", "Urgencia", "Asignado a", "Estado", "Fecha Creación", "Cierre", "Notas Cierre"];
-    var lineas = [cabeceras.join(";")];
-    filtrarTareas(state.tareas).forEach(function(t) {
-      var linea = [t.id, '"' + (t.titulo||'').replace(/"/g,'""') + '"', t.categoria || 'General', t.urgencia ? 'URGENTE' : 'Normal',
-        '"' + nombreDe(t.assigned_to) + '"', t.status, t.created_at, t.cerrado_en || '', '"' + (t.notas_cierre||'').replace(/"/g,'""') + '"'];
-      lineas.push(linea.join(";"));
+    var filas = filtrarTareas(state.tareas).map(function(t){
+      return {
+        'ID': t.id,
+        'Título': t.titulo || '',
+        'Categoría': t.categoria || 'General',
+        'Urgencia': t.urgencia ? 'URGENTE' : 'Normal',
+        'Asignado a': nombreDe(t.assigned_to),
+        'Estado': t.status,
+        'Fecha Creación': formatFecha(t.created_at),
+        'Cierre': t.cerrado_en ? formatFecha(t.cerrado_en) : '',
+        'Notas Cierre': t.notas_cierre || ''
+      };
     });
-    var blob = new Blob(["\uFEFF" + lineas.join("\n")], {type: "text/csv;charset=utf-8;"});
-    var link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "Reporte_Brigada_Sarinena.csv";
-    link.click();
-    showToast("📊 Archivo Excel generado");
+    var hoja = XLSX.utils.json_to_sheet(filas);
+    var libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, 'Tareas');
+    XLSX.writeFile(libro, 'Reporte_Brigada_Sarinena.xlsx');
+    showToast('📊 Archivo Excel generado');
   }
 
   function nombreRol(rol){
@@ -878,6 +888,7 @@
           </form>\
           ' + (isL && !state.mostrarOlvide ? '<button class="link-btn-plain" id="btn-olvide" style="background:none;border:none;color:var(--primary);font-size:13px;margin-top:4px;">¿Olvidaste tu contraseña?</button>' : '') + '\
           ' + formularioOlvide + '\
+          <div class="app-footer">Ayuntamiento de Sariñena · v' + APP_VERSION + '</div>\
         </div>\
       </div>';
   }
@@ -963,19 +974,20 @@
   }
 
   function exportarInventarioExcel(){
-    var cabeceras = ['Artículo', 'Cantidad', 'Población'];
-    var lineas = [cabeceras.join(';')];
     var ordenado = state.inventario.slice().sort(function(a,b){
       return (a.poblacion||'').localeCompare(b.poblacion||'') || a.articulo.localeCompare(b.articulo);
     });
-    ordenado.forEach(function(i){
-      lineas.push('"' + (i.articulo||'').replace(/"/g,'""') + '";' + i.cantidad + ';"' + (i.poblacion||'').replace(/"/g,'""') + '"');
+    var filas = ordenado.map(function(i){
+      return {
+        'Artículo': i.articulo || '',
+        'Cantidad': i.cantidad,
+        'Población': i.poblacion || ''
+      };
     });
-    var blob = new Blob(["\uFEFF" + lineas.join('\n')], {type: 'text/csv;charset=utf-8;'});
-    var link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'Inventario_Brigada_Sarinena.csv';
-    link.click();
+    var hoja = XLSX.utils.json_to_sheet(filas);
+    var libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, 'Inventario');
+    XLSX.writeFile(libro, 'Inventario_Brigada_Sarinena.xlsx');
     showToast('📊 Inventario exportado');
   }
 
@@ -1066,7 +1078,7 @@
       return '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);"><input type="checkbox" name="assignedTo" value="'+m.id+'" style="width:auto;margin:0;"> '+m.nombre+'</label>';
     }).join('');
     return '\
-      <div class="row" style="margin-bottom:14px;"><button class="btn-ghost btn-sm" style="flex:1;" id="btn-export">📊 Excel (CSV)</button><button class="btn-ghost btn-sm" style="flex:1;" id="btn-export-pdf">📄 PDF con fotos</button></div>\
+      <div class="row" style="margin-bottom:14px;"><button class="btn-ghost btn-sm" style="flex:1;" id="btn-export">📊 Excel (.xlsx)</button><button class="btn-ghost btn-sm" style="flex:1;" id="btn-export-pdf">📄 PDF con fotos</button></div>\
       <form id="add-task-form" class="card stack" style="margin-bottom:18px;">\
         <h3 style="margin-bottom:0; font-size:16px;">+ Nueva Orden de Trabajo</h3>\
         <div class="row">\
@@ -1317,7 +1329,7 @@
 
   function render(){
     var app = document.getElementById('app');
-    var html = state.screen === 'loading' ? '<div class="loading-screen">Cargando…</div>'
+    var html = state.screen === 'loading' ? '<div class="loading-screen"><img src="icon-192.png" alt="Logo"><div class="loading-text">Cargando ' + BRIGADA_NOMBRE + '…</div></div>'
       : state.screen === 'auth' ? screenAuth()
       : state.screen === 'nuevaContrasena' ? screenNuevaContrasena()
       : state.screen === 'adminHome' ? screenAdminHome()
