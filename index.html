@@ -414,6 +414,34 @@
   }
 
   // --- ACCIONES ---
+  function mostrarResumenNovedades(perfil){
+    try{
+      var clave = 'brigada_ultima_visita_' + perfil.id;
+      var ultimaVisitaStr = localStorage.getItem(clave);
+      var ahora = new Date().toISOString();
+
+      if(ultimaVisitaStr){
+        var ultimaVisita = new Date(ultimaVisitaStr);
+        if(perfil.rol === 'secundario'){
+          var nuevas = state.tareas.filter(function(t){ return t.assigned_to === perfil.id && new Date(t.created_at) > ultimaVisita; }).length;
+          if(nuevas > 0){
+            showToast('🆕 Tienes ' + nuevas + (nuevas === 1 ? ' tarea nueva' : ' tareas nuevas') + ' desde tu última visita');
+          }
+        } else if(perfil.rol === 'principal' || perfil.rol === 'administrador'){
+          var nuevasGeneral = state.tareas.filter(function(t){ return new Date(t.created_at) > ultimaVisita; }).length;
+          var cerradasGeneral = state.tareas.filter(function(t){ return t.cerrado_en && new Date(t.cerrado_en) > ultimaVisita; }).length;
+          if(nuevasGeneral > 0 || cerradasGeneral > 0){
+            var partes = [];
+            if(nuevasGeneral > 0) partes.push(nuevasGeneral + ' nueva' + (nuevasGeneral===1?'':'s'));
+            if(cerradasGeneral > 0) partes.push(cerradasGeneral + ' finalizada' + (cerradasGeneral===1?'':'s'));
+            showToast('🆕 ' + partes.join(' y ') + ' desde tu última visita');
+          }
+        }
+      }
+      localStorage.setItem(clave, ahora);
+    }catch(e){ /* localStorage puede fallar en algún caso raro; no pasa nada si no se muestra el resumen */ }
+  }
+
   async function cargarSesionCompleta(perfil){
     state.perfil = perfil;
     if('clearAppBadge' in navigator){ navigator.clearAppBadge().catch(function(){}); }
@@ -422,6 +450,7 @@
     await cargarApuntesBloc(perfil.id);
     state.screen = pantallaSegunRol(perfil.rol);
     suscribirCambiosTareas();
+    setTimeout(function(){ mostrarResumenNovedades(perfil); }, 900);
   }
 
   async function init(){
