@@ -180,6 +180,10 @@
     authTab: 'login',
     mostrarOlvide: false,
     mostrarCuenta: false,
+    filtroFechaBloc: '',
+    mostrarAvisoLegal: false,
+    mostrarTutorial: false,
+    tutorialPaso: 0,
     filtroTareas: 'pendiente',
     filtroFecha: 'todas',
     filtroPersona: '',
@@ -442,6 +446,40 @@
     }catch(e){ /* localStorage puede fallar en algún caso raro; no pasa nada si no se muestra el resumen */ }
   }
 
+  function pasosTutorial(rol){
+    if(rol === 'secundario'){
+      return [
+        { titulo: '👋 Bienvenido/a', texto: 'Aquí verás las tareas que te asigne la jefatura. Vamos a ver lo básico en 4 pasos rápidos.' },
+        { titulo: '📋 Tus tareas', texto: 'En la pestaña "Tareas" verás lo que tienes pendiente. Toca "✔️ Finalizar Parte" cuando termines: escribe una nota y, si quieres, adjunta una foto.' },
+        { titulo: '🔔 Notificaciones', texto: 'Pulsa "🔔 Activar notificaciones" para que te avisen al momento de tareas nuevas, aunque tengas la app cerrada.' },
+        { titulo: '📝 Bloc y Stock', texto: 'En "Bloc" puedes apuntar cosas del día a día, y en "Stock" ver el material disponible por localidad.' }
+      ];
+    }
+    return [
+      { titulo: '👋 Bienvenido/a', texto: 'Desde aquí gestionas las tareas de la brigada. Vamos a ver lo básico en 4 pasos rápidos.' },
+      { titulo: '📋 Asignar tareas', texto: 'En "Órdenes" puedes crear una tarea y marcar varios operarios a la vez para asignarla a todos.' },
+      { titulo: '📈 Stats y Papelera', texto: 'En "Stats" verás cuánto trabaja cada operario, y también la papelera (por si eliminas algo sin querer) y el historial de cambios.' },
+      { titulo: '🔔 Notificaciones', texto: 'Activa las notificaciones para enterarte al momento cuando alguien finalice una tarea o comente algo.' }
+    ];
+  }
+
+  function comprobarTutorial(perfil){
+    try{
+      var clave = 'brigada_tutorial_visto_' + perfil.id;
+      if(!localStorage.getItem(clave)){
+        state.mostrarTutorial = true;
+        state.tutorialPaso = 0;
+        render();
+      }
+    }catch(e){}
+  }
+
+  function cerrarTutorial(){
+    try{ localStorage.setItem('brigada_tutorial_visto_' + state.perfil.id, '1'); }catch(e){}
+    state.mostrarTutorial = false;
+    render();
+  }
+
   async function cargarSesionCompleta(perfil){
     state.perfil = perfil;
     if('clearAppBadge' in navigator){ navigator.clearAppBadge().catch(function(){}); }
@@ -451,6 +489,7 @@
     state.screen = pantallaSegunRol(perfil.rol);
     suscribirCambiosTareas();
     setTimeout(function(){ mostrarResumenNovedades(perfil); }, 900);
+    comprobarTutorial(perfil);
   }
 
   async function init(){
@@ -730,6 +769,18 @@
     }catch(err){ showToast('Error: ' + err.message); }
   }
 
+  async function eliminarTareaDefinitivo(id){
+    if(!confirm('¿Eliminar esta tarea PARA SIEMPRE? No se podrá recuperar.')) return;
+    try{
+      var tarea = state.tareas.find(function(t){ return t.id === id; });
+      await sb.from('tareas').delete().eq('id', id);
+      state.tareas = state.tareas.filter(function(t){ return t.id !== id; });
+      await sb.from('historial_cambios').insert({ tarea_id: null, tarea_titulo: tarea ? tarea.titulo : '', accion: 'eliminada', usuario_id: state.perfil.id, detalle: 'Eliminada para siempre desde la papelera' });
+      showToast('🗑 Eliminada para siempre');
+      render();
+    }catch(err){ showToast('Error: ' + err.message); }
+  }
+
   async function handleCerrarTarea(e){
     e.preventDefault();
     var fd = new FormData(e.target);
@@ -793,6 +844,16 @@
       if(btn){ btn.disabled = false; btn.textContent = 'Cerrar Tarea'; }
     }
     state.busy = false; render();
+  }
+
+  async function eliminarMaterialDefinitivo(id){
+    if(!confirm('¿Eliminar este material del inventario para siempre? No se puede deshacer.')) return;
+    try{
+      await sb.from('inventario').delete().eq('id', id);
+      state.inventario = state.inventario.filter(function(i){ return i.id !== id; });
+      showToast('🗑 Material eliminado');
+      render();
+    }catch(err){ showToast('Error: ' + err.message); }
   }
 
   async function handleUpdateInventario(id, qtyChange){
@@ -913,11 +974,12 @@
             ' + (!isL ? '<div class="field"><input name="nombre" placeholder="Nombre completo" required></div>' : '') + '\
             <div class="field"><input name="email" type="email" placeholder="Correo" required></div>\
             <div class="field" style="margin-bottom:0;"><input name="password" type="password" placeholder="Contraseña" required></div>\
-            <button type="submit" class="btn-primary btn-full">' + (isL?'Entrar':'Crear Cuenta') + '</button>\
+            ' + (!isL ? '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ink-soft);margin-top:10px;"><input type="checkbox" name="aceptaAvisoLegal" required style="width:auto;margin-top:2px;"> He leído y acepto el <button type="button" id="btn-ver-aviso-legal" style="background:none;border:none;color:var(--primary);font-size:12px;padding:0;text-decoration:underline;">aviso legal y de protección de datos</button></label>' : '') + '\
+            <button type="submit" class="btn-primary btn-full" style="margin-top:14px;">' + (isL?'Entrar':'Crear Cuenta') + '</button>\
           </form>\
           ' + (isL && !state.mostrarOlvide ? '<button class="link-btn-plain" id="btn-olvide" style="background:none;border:none;color:var(--primary);font-size:13px;margin-top:4px;">¿Olvidaste tu contraseña?</button>' : '') + '\
           ' + formularioOlvide + '\
-          <div class="app-footer">Ayuntamiento de Sariñena · v' + APP_VERSION + '</div>\
+          <div class="app-footer">Ayuntamiento de Sariñena · v' + APP_VERSION + ' · <button id="btn-ver-aviso-legal-footer" style="background:none;border:none;color:var(--ink-soft);font-size:11px;text-decoration:underline;font-family:var(--font-mono);">Aviso legal</button></div>\
         </div>\
       </div>';
   }
@@ -983,7 +1045,13 @@
   }
 
   function renderBlocSection(){
-    var lista = state.apuntesBloc.map(function(a){
+    var apuntesFiltrados = state.apuntesBloc;
+    if(state.filtroFechaBloc){
+      apuntesFiltrados = apuntesFiltrados.filter(function(a){
+        return new Date(a.created_at).toISOString().slice(0,10) === state.filtroFechaBloc;
+      });
+    }
+    var lista = apuntesFiltrados.map(function(a){
       return '\
         <div class="comment-item" style="position:relative; padding-right:36px;">\
           <div class="comment-author">' + formatFecha(a.created_at) + '</div>\
@@ -998,7 +1066,11 @@
           <input name="texto" placeholder="Ej: 40 sillas cargadas" required style="flex:1;">\
           <button type="submit" class="btn-primary">Añadir</button>\
         </form>\
-        <div class="stack" style="gap:8px;">' + (lista || '<p class="empty">Todavía no hay apuntes.</p>') + '</div>\
+        <div class="row">\
+          <input type="date" id="filtro-fecha-bloc" value="' + (state.filtroFechaBloc || '') + '" style="flex:1;">\
+          ' + (state.filtroFechaBloc ? '<button type="button" class="btn-ghost btn-sm" id="btn-limpiar-fecha-bloc">✕ Quitar filtro</button>' : '') + '\
+        </div>\
+        <div class="stack" style="gap:8px;">' + (apuntesFiltrados.length ? lista : '<p class="empty">' + (state.filtroFechaBloc ? 'No hay apuntes ese día.' : 'Todavía no hay apuntes.') + '</p>') + '</div>\
       </div>';
   }
 
@@ -1037,7 +1109,8 @@
       var controls = puedeEditar
         ? '<button class="inv-btn" data-inv-id="'+i.id+'" data-inv-val="-1">-</button><span style="font-family:var(--font-mono); font-weight:bold; width:30px; text-align:center;">'+i.cantidad+'</span><button class="inv-btn" data-inv-id="'+i.id+'" data-inv-val="1">+</button>'
         : '<span style="font-family:var(--font-mono); font-size:17px; font-weight:bold;">'+i.cantidad+' uds</span>';
-      return '<div class="inv-item"><div class="inv-name">'+i.articulo+'</div><div class="inv-controls">'+controls+'</div></div>';
+      var btnBorrar = puedeEditar ? '<button class="inv-btn" data-inv-borrar="'+i.id+'" style="color:var(--red);">🗑</button>' : '';
+      return '<div class="inv-item"><div class="inv-name">'+i.articulo+'</div><div class="inv-controls">'+controls+btnBorrar+'</div></div>';
     }
     var gruposHtml = '';
     var otrasLocalidades = [];
@@ -1173,12 +1246,13 @@
     var eliminadas = state.tareas.filter(function(t){ return t.eliminado_en; });
     var lista = eliminadas.map(function(t){
       return '\
-        <div class="ios-row">\
+        <div class="ios-row" style="flex-wrap:wrap;">\
           <div class="ios-row-main">\
             <div class="ios-row-title">'+t.titulo+'</div>\
             <div class="ios-row-sub">Asignada a '+nombreDe(t.assigned_to)+' · eliminada '+formatFecha(t.eliminado_en)+' por '+nombreDe(t.eliminado_por)+'</div>\
           </div>\
           <button class="btn-ghost btn-sm" data-restaurar-tarea="'+t.id+'">♻️ Restaurar</button>\
+          <button class="btn-danger-ghost btn-sm" data-borrar-definitivo="'+t.id+'">🗑 Eliminar para siempre</button>\
         </div>';
     }).join('') || '<div class="ios-row"><span class="empty">La papelera está vacía.</span></div>';
     return '<p class="eyebrow" style="margin-top:22px;">🗑 Papelera (' + eliminadas.length + ')</p><div class="ios-list">' + lista + '</div>';
@@ -1390,6 +1464,34 @@
           </form></div>';
       } else { state.modalEditarTaskId = null; }
     }
+    if(state.mostrarTutorial && state.perfil){
+      var pasos = pasosTutorial(state.perfil.rol);
+      var paso = pasos[state.tutorialPaso];
+      var esUltimo = state.tutorialPaso === pasos.length - 1;
+      var puntos = pasos.map(function(p, idx){ return '<span style="width:7px;height:7px;border-radius:50%;display:inline-block;margin:0 3px;background:'+(idx===state.tutorialPaso?'var(--primary)':'var(--border)')+';"></span>'; }).join('');
+      html += '\
+        <div class="cierre-form-modal"><div class="card stack" style="width:100%; max-width:400px; text-align:center;">\
+          <h3 style="font-size:19px;">'+paso.titulo+'</h3>\
+          <p class="hint" style="line-height:1.6;font-size:14px;">'+paso.texto+'</p>\
+          <div style="margin:6px 0;">'+puntos+'</div>\
+          <div class="row">\
+            <button class="btn-ghost spacer" id="btn-tutorial-saltar">Saltar</button>\
+            <button class="btn-primary spacer" id="btn-tutorial-siguiente">'+(esUltimo ? 'Empezar' : 'Siguiente')+'</button>\
+          </div>\
+        </div></div>';
+    }
+    if(state.mostrarAvisoLegal){
+      html += '\
+        <div class="cierre-form-modal"><div class="card stack" style="width:100%; max-width:440px; max-height:80vh; overflow-y:auto;">\
+          <div class="row" style="justify-content:space-between;"><h3>Aviso legal y protección de datos</h3><button id="btn-cerrar-aviso-legal" style="background:none;border:none;color:var(--ink-soft);font-size:20px;">✕</button></div>\
+          <p class="hint" style="line-height:1.6;">\
+            Esta aplicación es una herramienta interna del Ayuntamiento de Sariñena para la gestión de tareas y personal de la brigada municipal.<br><br>\
+            Los datos personales tratados (nombre, correo electrónico, fotografías de trabajos y ubicación) se utilizan exclusivamente para la organización y seguimiento del trabajo de la brigada, conforme al Reglamento (UE) 2016/679 (RGPD) y la Ley Orgánica 3/2018 (LOPDGDD).<br><br>\
+            Los datos no se cederán a terceros salvo obligación legal. Cualquier persona usuaria puede solicitar el acceso, rectificación o supresión de sus datos contactando con el Ayuntamiento.<br><br>\
+            El uso de esta aplicación implica la aceptación de estas condiciones.\
+          </p>\
+        </div></div>';
+    }
     if(state.mostrarCuenta){
       html += '\
         <div class="cierre-form-modal"><div class="card stack" style="width:100%; max-width:400px;">\
@@ -1453,10 +1555,15 @@
 
     app.querySelectorAll('.form-comentario').forEach(function(f){ f.addEventListener('submit', function(e){ handleAddComentario(e, f.getAttribute('data-task')); }); });
 
-    app.querySelectorAll('.inv-btn').forEach(function(btn){ btn.addEventListener('click', function(){ handleUpdateInventario(btn.getAttribute('data-inv-id'), parseInt(btn.getAttribute('data-inv-val'))); }); });
+    app.querySelectorAll('.inv-btn[data-inv-id]').forEach(function(btn){ btn.addEventListener('click', function(){ handleUpdateInventario(btn.getAttribute('data-inv-id'), parseInt(btn.getAttribute('data-inv-val'))); }); });
+    app.querySelectorAll('[data-inv-borrar]').forEach(function(btn){ btn.addEventListener('click', function(){ eliminarMaterialDefinitivo(btn.getAttribute('data-inv-borrar')); }); });
     var formInv = document.getElementById('form-add-inv'); if(formInv) formInv.addEventListener('submit', handleAddInventario);
 
     var formApunte = document.getElementById('form-add-apunte'); if(formApunte) formApunte.addEventListener('submit', handleAddApunte);
+    var filtroFechaBlocEl = document.getElementById('filtro-fecha-bloc');
+    if(filtroFechaBlocEl){ filtroFechaBlocEl.addEventListener('change', function(){ state.filtroFechaBloc = filtroFechaBlocEl.value; render(); }); }
+    var btnLimpiarFechaBloc = document.getElementById('btn-limpiar-fecha-bloc');
+    if(btnLimpiarFechaBloc){ btnLimpiarFechaBloc.addEventListener('click', function(){ state.filtroFechaBloc = ''; render(); }); }
     app.querySelectorAll('[data-apunte-borrar]').forEach(function(btn){ btn.addEventListener('click', function(){ borrarApunte(btn.getAttribute('data-apunte-borrar')); }); });
 
     var btnExport = document.getElementById('btn-export'); if(btnExport) btnExport.addEventListener('click', exportarAExcel);
@@ -1464,6 +1571,7 @@
     var btnExportInv = document.getElementById('btn-export-inv'); if(btnExportInv) btnExportInv.addEventListener('click', exportarInventarioExcel);
     var btnBackup = document.getElementById('btn-backup'); if(btnBackup) btnBackup.addEventListener('click', generarCopiaSeguridad);
     app.querySelectorAll('[data-restaurar-tarea]').forEach(function(n){ n.addEventListener('click', function(){ restaurarTarea(n.getAttribute('data-restaurar-tarea')); }); });
+    app.querySelectorAll('[data-borrar-definitivo]').forEach(function(n){ n.addEventListener('click', function(){ eliminarTareaDefinitivo(n.getAttribute('data-borrar-definitivo')); }); });
 
     var lf = document.getElementById('login-form'); if(lf) lf.addEventListener('submit', handleLogin);
     var rf = document.getElementById('register-form'); if(rf) rf.addEventListener('submit', handleRegister);
@@ -1475,6 +1583,18 @@
     var cambiarEmailForm = document.getElementById('cambiar-email-form'); if(cambiarEmailForm) cambiarEmailForm.addEventListener('submit', handleCambiarEmail);
     var btnCuenta = document.getElementById('btn-mi-cuenta'); if(btnCuenta) btnCuenta.addEventListener('click', function(){ state.mostrarCuenta = !state.mostrarCuenta; render(); });
     var btnCerrarCuenta = document.getElementById('btn-cerrar-cuenta'); if(btnCerrarCuenta) btnCerrarCuenta.addEventListener('click', function(){ state.mostrarCuenta = false; render(); });
+    var btnVerAviso = document.getElementById('btn-ver-aviso-legal'); if(btnVerAviso) btnVerAviso.addEventListener('click', function(){ state.mostrarAvisoLegal = true; render(); });
+    var btnVerAvisoFooter = document.getElementById('btn-ver-aviso-legal-footer'); if(btnVerAvisoFooter) btnVerAvisoFooter.addEventListener('click', function(){ state.mostrarAvisoLegal = true; render(); });
+    var btnCerrarAviso = document.getElementById('btn-cerrar-aviso-legal'); if(btnCerrarAviso) btnCerrarAviso.addEventListener('click', function(){ state.mostrarAvisoLegal = false; render(); });
+    var btnTutorialSaltar = document.getElementById('btn-tutorial-saltar'); if(btnTutorialSaltar) btnTutorialSaltar.addEventListener('click', cerrarTutorial);
+    var btnTutorialSiguiente = document.getElementById('btn-tutorial-siguiente');
+    if(btnTutorialSiguiente){
+      btnTutorialSiguiente.addEventListener('click', function(){
+        var totalPasos = pasosTutorial(state.perfil.rol).length;
+        if(state.tutorialPaso < totalPasos - 1){ state.tutorialPaso++; render(); }
+        else{ cerrarTutorial(); }
+      });
+    }
     var atf = document.getElementById('add-task-form'); if(atf) atf.addEventListener('submit', handleAddTask);
     var mcf = document.getElementById('modal-cierre-form'); if(mcf) mcf.addEventListener('submit', handleCerrarTarea);
     var cmb = document.getElementById('close-modal-btn'); if(cmb) cmb.addEventListener('click', function(){ state.modalCierreTaskId = null; render(); });
@@ -1509,6 +1629,8 @@
     if(state.modalCierreTaskId) return true;
     if(state.modalEditarTaskId) return true;
     if(state.mostrarCuenta) return true;
+    if(state.mostrarTutorial) return true;
+    if(state.mostrarAvisoLegal) return true;
     return false;
   }
 
