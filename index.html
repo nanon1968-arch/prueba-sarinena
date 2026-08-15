@@ -28,6 +28,7 @@
     --font-display:var(--font-body);
     --font-mono:"SF Mono", ui-monospace, Menlo, monospace;
     --tabbar-h:64px;
+    --shadow-card:0 2px 10px rgba(0,0,0,0.28);
   }
   body.tema-claro{
     --bg:#F2F2F7; --surface:#FFFFFF; --surface-alt:#EFEFF4;
@@ -54,7 +55,10 @@
   input:focus, select:focus, textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light);}
   .field{margin-bottom:14px;}
 
-  button{font-family:var(--font-body);font-weight:600;font-size:15px;border:none;border-radius:12px;padding:12px 16px;cursor:pointer;}
+  button{font-family:var(--font-body);font-weight:600;font-size:15px;border:none;border-radius:12px;padding:12px 16px;cursor:pointer;transition:transform 0.08s ease, opacity 0.08s ease;}
+  button:active{transform:scale(0.96);opacity:0.85;}
+  .ios-row, .inv-item, .mini-badge{transition:opacity 0.08s ease;}
+  .ios-row:active, .inv-item:active{opacity:0.7;}
   .btn-primary{background:var(--primary);color:#fff;}
   .btn-primary:active{background:var(--primary-dark);}
   .btn-ghost{background:var(--surface-alt);color:var(--primary);border:1px solid var(--border);}
@@ -63,7 +67,7 @@
   .btn-sm{padding:8px 12px;font-size:13px;border-radius:9px;}
   button:disabled{opacity:0.5;cursor:not-allowed;}
 
-  .card{background:var(--surface);border-radius:14px;padding:16px;border:1px solid var(--border);}
+  .card{background:var(--surface);border-radius:14px;padding:16px;border:1px solid var(--border);box-shadow:var(--shadow-card);}
   .error-msg{background:rgba(255,69,58,0.15);color:var(--red);font-size:13px;font-weight:600;padding:10px 12px;border-radius:10px;margin-bottom:14px;}
   .hint{font-size:12.5px;color:var(--ink-soft);line-height:1.5;}
 
@@ -78,7 +82,7 @@
   .badge-name{font-family:var(--font-display);font-size:20px;font-weight:700;margin:8px 0 2px;}
 
   /* Lista estilo iOS agrupada */
-  .ios-list{background:var(--surface);border-radius:14px;overflow:hidden;border:1px solid var(--border);}
+  .ios-list{background:var(--surface);border-radius:14px;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow-card);}
   .ios-row{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border);}
   .ios-row:last-child{border-bottom:none;}
   .ios-row-main{flex:1;min-width:0;}
@@ -114,14 +118,15 @@
     display:flex;z-index:100;
   }
   .ios-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;color:var(--ink-soft);font-size:10.5px;font-weight:500;padding:6px 2px 4px;border-radius:0;}
-  .ios-tab .tab-icon{font-size:22px;line-height:1;}
+  .ios-tab .tab-icon{display:flex;align-items:center;justify-content:center;line-height:1;}
+  .ios-tab .tab-icon svg{display:block;}
   .ios-tab.active{color:var(--primary);}
 
   .top-header{display:flex;align-items:center;justify-content:space-between;padding:14px 4px 4px;}
   .company-name{font-family:var(--font-display);font-size:22px;font-weight:700;}
   .logout-link{font-size:13px;color:var(--red);background:none;border:none;padding:6px;font-weight:600;}
 
-  .task-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:15px;}
+  .task-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:15px;box-shadow:var(--shadow-card);}
   .task-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
   .task-title{font-family:var(--font-display);font-weight:600;font-size:16px;}
   .task-desc{font-size:13.5px;color:var(--ink-soft);margin-top:6px;line-height:1.4;}
@@ -154,6 +159,16 @@
 <script>
 (function(){
   var BRIGADA_NOMBRE = 'Brigada de Sariñena';
+
+  var ICONOS_SVG = {
+    tareas: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="12" y2="18"/></svg>',
+    equipo: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    stats: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+    stock: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
+    bloc: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    usuarios: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94Z"/></svg>'
+  };
+  function iconoTab(nombre){ return ICONOS_SVG[nombre] || ''; }
   var LOCALIDADES = ['Sariñena', 'La Cartuja de Monegros', 'San Juan del Flumen', 'Pallaruelo', 'Lastanosa', 'Lamasadera'];
   var APP_VERSION = '1.0';
   var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
@@ -174,6 +189,7 @@
     inventario: [],
     apuntesBloc: [],
     historial: [],
+    documentos: [],
     error: '', toast: '', busy: false,
     principalTab: 'tareas',   // tareas, usuarios, inventario, bloc
     secondaryTab: 'tareas',   // tareas, inventario, bloc
@@ -222,6 +238,8 @@
     if(!resI.error) state.inventario = resI.data || [];
     var resH = await sb.from('historial_cambios').select('*').order('created_at', {ascending:false}).limit(50);
     if(!resH.error) state.historial = resH.data || [];
+    var resD = await sb.from('documentos_tarea').select('*').order('created_at', {ascending:true});
+    if(!resD.error) state.documentos = resD.data || [];
   }
 
   async function cargarPerfil(userId){
@@ -734,6 +752,44 @@
     }catch(err){ showToast('Error al comentar'); }
   }
 
+  async function handleAdjuntarDocumento(taskId, file){
+    if(!file) return;
+    showToast('📎 Subiendo documento...');
+    try{
+      var extension = (file.name.split('.').pop() || 'archivo').toLowerCase();
+      var path = 'documentos/' + taskId + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      var contenido = await file.arrayBuffer();
+      var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, contenido, { upsert: true, contentType: file.type || 'application/octet-stream' });
+      if(subida.error) throw subida.error;
+      var url = sb.storage.from(FOTOS_BUCKET).getPublicUrl(path).data.publicUrl;
+      var res = await sb.from('documentos_tarea').insert({
+        task_id: taskId, user_id: state.perfil.id, nombre_archivo: file.name, url: url, tipo: extension
+      }).select().single();
+      if(res.error) throw res.error;
+      state.documentos.push(res.data);
+      showToast('✅ Documento adjuntado');
+      render();
+    }catch(err){ showToast('Error al subir: ' + err.message); }
+  }
+
+  async function borrarDocumento(id){
+    if(!confirm('¿Eliminar este documento?')) return;
+    try{
+      await sb.from('documentos_tarea').delete().eq('id', id);
+      state.documentos = state.documentos.filter(function(d){ return d.id !== id; });
+      render();
+    }catch(err){ showToast('Error al borrar'); }
+  }
+
+  function iconoDocumento(tipo){
+    if(tipo === 'pdf') return '📕';
+    if(['doc','docx'].indexOf(tipo) !== -1) return '📘';
+    if(['xls','xlsx','csv'].indexOf(tipo) !== -1) return '📗';
+    if(['jpg','jpeg','png','gif','webp'].indexOf(tipo) !== -1) return '🖼️';
+    if(['dwg','dxf'].indexOf(tipo) !== -1) return '📐';
+    return '📄';
+  }
+
   async function handleEditarTarea(e){
     e.preventDefault();
     var fd = new FormData(e.target);
@@ -999,6 +1055,29 @@
       </div>';
   }
 
+  function etiquetaGrupoFecha(fechaIso){
+    var fecha = new Date(fechaIso);
+    var hoy = new Date();
+    var ayer = new Date(); ayer.setDate(hoy.getDate() - 1);
+    if(fecha.toDateString() === hoy.toDateString()) return 'Hoy';
+    if(fecha.toDateString() === ayer.toDateString()) return 'Ayer';
+    return fecha.toLocaleDateString('es-ES', {day:'numeric', month:'long', year: fecha.getFullYear() !== hoy.getFullYear() ? 'numeric' : undefined});
+  }
+
+  function conSeparadoresDeFecha(items, campoFecha, renderItem){
+    var html = '';
+    var ultimoGrupo = null;
+    items.forEach(function(item){
+      var grupo = etiquetaGrupoFecha(item[campoFecha]);
+      if(grupo !== ultimoGrupo){
+        html += '<p class="eyebrow" style="margin-top:14px;">' + grupo + '</p>';
+        ultimoGrupo = grupo;
+      }
+      html += renderItem(item);
+    });
+    return html;
+  }
+
   function tareaCumpleFecha(t){
     if(state.filtroFecha === 'todas') return true;
     var fecha = new Date(t.created_at);
@@ -1135,6 +1214,24 @@
     var done = t.status === 'hecho';
     var companeros = t.lote_id ? state.tareas.filter(function(t2){ return t2.lote_id === t.lote_id && t2.id !== t.id; }) : [];
     var comments = state.comentarios.filter(function(c){ return c.task_id === t.id; });
+    var documentos = state.documentos.filter(function(d){ return d.task_id === t.id; });
+    var htmlDocumentos = '<div class="comments-section">';
+    htmlDocumentos += '<p class="hint" style="margin-bottom:6px;">📎 Documentos</p>';
+    if(documentos.length){
+      htmlDocumentos += documentos.map(function(d){
+        return '\
+          <div class="comment-item" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">\
+            <a href="'+d.url+'" target="_blank" rel="noopener" style="color:var(--ink);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+iconoDocumento(d.tipo)+' '+d.nombre_archivo+'</a>\
+            ' + (!soloLectura ? '<button data-doc-borrar="'+d.id+'" style="background:none;border:none;color:var(--ink-soft);font-size:13px;">🗑</button>' : '') + '\
+          </div>';
+      }).join('');
+    } else {
+      htmlDocumentos += '<p class="hint">Sin documentos adjuntos.</p>';
+    }
+    if(!soloLectura){
+      htmlDocumentos += '<label class="btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;">📎 Adjuntar documento (PDF, plano, Word...)<input type="file" data-doc-input="'+t.id+'" accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.dxf,image/*" style="display:none;"></label>';
+    }
+    htmlDocumentos += '</div>';
     var htmlComments = '<div class="comments-section">';
     if(comments.length){
       htmlComments += comments.map(function(c){ return '<div class="comment-item"><div class="comment-author">'+nombreDe(c.user_id)+'</div><div>'+c.texto+'</div></div>'; }).join('');
@@ -1164,7 +1261,7 @@
         ' + (done && t.foto_despues_url ? '<div><div class="hint" style="color:var(--green);margin-top:8px;">📷 Foto de cierre de ' + nombreDe(t.cerrado_por) + '</div><img class="task-photo" src="'+t.foto_despues_url+'" data-lightbox="'+t.foto_despues_url+'"></div>' : '') + '\
         ' + (done && t.notas_cierre ? '<div class="task-meta" style="background:var(--primary-light); color:var(--ink);"><b>Parte Final:</b> ' + t.notas_cierre + '</div>' : '') + '\
         ' + (done && t.materiales_usados && t.materiales_usados.length ? '<div class="task-meta"><b>📦 Material usado:</b><br>' + t.materiales_usados.map(function(m){ return '• ' + m.cantidad + ' × ' + m.articulo + (m.poblacion ? (' ('+m.poblacion+')') : ''); }).join('<br>') + '</div>' : '') + '\
-        ' + m + htmlComments + '\
+        ' + m + htmlDocumentos + htmlComments + '\
         ' + (soloLectura ? '' : ('\
         <div class="task-actions">\
           ' + (!done ? '<button class="btn-primary btn-sm" data-action-complete="'+t.id+'">✔️ Finalizar Parte</button>' : '<button class="btn-ghost btn-sm" data-action-reabrir="'+t.id+'">🔄 Reabrir</button>') + '\
@@ -1197,7 +1294,7 @@
         <button type="submit" class="btn-primary btn-full">Enviar Orden</button>\
       </form>\
       ' + (isGestor ? ('<select id="filtro-persona" style="margin-bottom:10px;"><option value="">👤 Todos los operarios</option>' + miembrosActivos.map(function(m){ return '<option value="'+m.id+'" '+(state.filtroPersona===m.id?'selected':'')+'>'+m.nombre+'</option>'; }).join('') + '</select>') : '') + '\
-      ' + renderFilterBar() + '<div class="grid">' + (tasks.length ? tasks.map(function(t){return taskCard(t,isGestor);}).join('') : '<div class="empty">No hay órdenes.</div>') + '</div>';
+      ' + renderFilterBar() + '<div class="grid">' + (tasks.length ? conSeparadoresDeFecha(tasks, 'created_at', function(t){return taskCard(t,isGestor);}) : '<div class="empty">No hay órdenes.</div>') + '</div>';
   }
 
   function renderEstadisticas(){
@@ -1293,11 +1390,11 @@
         ' + htmlContent + '\
       </div>\
       <div class="ios-tabbar">\
-        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">📋</span>Órdenes</button>\
-        <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">👥</span>Equipo</button>\
-        <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">📈</span>Stats</button>\
-        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">📦</span>Stock</button>\
-        <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">📝</span>Bloc</button>\
+        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Órdenes</button>\
+        <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">' + iconoTab('equipo') + '</span>Equipo</button>\
+        <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
+        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
+        <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
       </div>';
   }
 
@@ -1363,11 +1460,11 @@
         ' + htmlContent + '\
       </div>\
       <div class="ios-tabbar">\
-        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">📋</span>Órdenes</button>\
-        <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">🛠️</span>Usuarios</button>\
-        <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">📈</span>Stats</button>\
-        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">📦</span>Stock</button>\
-        <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">📝</span>Bloc</button>\
+        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Órdenes</button>\
+        <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">' + iconoTab('usuarios') + '</span>Usuarios</button>\
+        <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
+        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
+        <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
       </div>';
   }
 
@@ -1401,9 +1498,9 @@
       <div class="top-header"><div><p class="eyebrow">Solo lectura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll"><p class="hint" style="margin-bottom:10px;">👁 Puedes ver todo, pero no editar ni borrar nada desde esta cuenta.</p>' + htmlContent + '</div>\
       <div class="ios-tabbar">\
-        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">📋</span>Tareas</button>\
-        <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">📈</span>Stats</button>\
-        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">📦</span>Stock</button>\
+        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Tareas</button>\
+        <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
+        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
       </div>';
   }
 
@@ -1414,7 +1511,7 @@
     if(tab === 'tareas'){ marcarVistasSiHaceFalta(tasks.filter(function(t){ return t.status === 'pendiente'; })); }
     var htmlContent = '';
     if(tab === 'tareas'){
-      htmlContent = badgeCard(u) + '<div style="margin:12px 0;"><button class="btn-ghost btn-full" data-toggle-disp>Cambiar a '+(u.disponible?'Ocupado':'Disponible')+'</button><button class="btn-ghost btn-full" id="btn-activar-push" style="margin-top:8px;">🔔 Activar notificaciones</button><button class="btn-ghost btn-full" id="btn-tema" style="margin-top:8px;">🌗 Cambiar tema</button></div>' + renderFilterBar() + '<div class="grid">' + (tasks.length ? tasks.map(function(t){return taskCard(t,false);}).join('') : '<div class="empty">Sin tareas asignadas.</div>') + '</div>';
+      htmlContent = badgeCard(u) + '<div style="margin:12px 0;"><button class="btn-ghost btn-full" data-toggle-disp>Cambiar a '+(u.disponible?'Ocupado':'Disponible')+'</button><button class="btn-ghost btn-full" id="btn-activar-push" style="margin-top:8px;">🔔 Activar notificaciones</button><button class="btn-ghost btn-full" id="btn-tema" style="margin-top:8px;">🌗 Cambiar tema</button></div>' + renderFilterBar() + '<div class="grid">' + (tasks.length ? conSeparadoresDeFecha(tasks, 'created_at', function(t){return taskCard(t,false);}) : '<div class="empty">Sin tareas asignadas.</div>') + '</div>';
     } else if(tab === 'inventario'){ htmlContent = renderInventarioSection(false); }
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
 
@@ -1422,9 +1519,9 @@
       <div class="top-header"><div><p class="eyebrow">' + BRIGADA_NOMBRE + '</p><div class="company-name">Mi perfil</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll">' + htmlContent + '</div>\
       <div class="ios-tabbar">\
-        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-sectab="tareas"><span class="tab-icon">📋</span>Tareas</button>\
-        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-sectab="inventario"><span class="tab-icon">📦</span>Stock</button>\
-        <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-sectab="bloc"><span class="tab-icon">📝</span>Bloc</button>\
+        <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-sectab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Tareas</button>\
+        <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-sectab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
+        <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-sectab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
       </div>';
   }
 
@@ -1554,6 +1651,13 @@
     }); });
 
     app.querySelectorAll('.form-comentario').forEach(function(f){ f.addEventListener('submit', function(e){ handleAddComentario(e, f.getAttribute('data-task')); }); });
+    app.querySelectorAll('[data-doc-input]').forEach(function(inp){
+      inp.addEventListener('change', function(){
+        var file = inp.files && inp.files[0];
+        if(file){ handleAdjuntarDocumento(inp.getAttribute('data-doc-input'), file); }
+      });
+    });
+    app.querySelectorAll('[data-doc-borrar]').forEach(function(btn){ btn.addEventListener('click', function(){ borrarDocumento(btn.getAttribute('data-doc-borrar')); }); });
 
     app.querySelectorAll('.inv-btn[data-inv-id]').forEach(function(btn){ btn.addEventListener('click', function(){ handleUpdateInventario(btn.getAttribute('data-inv-id'), parseInt(btn.getAttribute('data-inv-val'))); }); });
     app.querySelectorAll('[data-inv-borrar]').forEach(function(btn){ btn.addEventListener('click', function(){ eliminarMaterialDefinitivo(btn.getAttribute('data-inv-borrar')); }); });
