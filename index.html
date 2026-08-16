@@ -197,6 +197,7 @@
     mostrarOlvide: false,
     mostrarCuenta: false,
     filtroFechaBloc: '',
+    calendarioMes: null,
     mostrarAvisoLegal: false,
     mostrarTutorial: false,
     tutorialPaso: 0,
@@ -935,14 +936,45 @@
   async function handleAddApunte(e){
     e.preventDefault();
     var input = e.target.querySelector('input[name="texto"]');
+    var esFestivo = e.target.querySelector('input[name="esFestivo"]').checked;
+    var horaInicio = e.target.querySelector('input[name="horaInicio"]').value;
+    var horaFin = e.target.querySelector('input[name="horaFin"]').value;
     var txt = input.value.trim();
     if(!txt) return;
+
+    if(esFestivo && (!horaInicio || !horaFin)){
+      showToast('⚠️ Indica hora de inicio y de fin para un apunte en festivo');
+      return;
+    }
+
+    var horasRecuperables = null;
+    if(esFestivo){
+      var inicioMin = parseInt(horaInicio.split(':')[0])*60 + parseInt(horaInicio.split(':')[1]);
+      var finMin = parseInt(horaFin.split(':')[0])*60 + parseInt(horaFin.split(':')[1]);
+      var diffMin = finMin - inicioMin;
+      if(diffMin <= 0){
+        showToast('⚠️ La hora de fin debe ser posterior a la de inicio');
+        return;
+      }
+      horasRecuperables = Math.round((diffMin/60) * 100) / 100;
+    }
+
     try{
-      var res = await sb.from('notas_bloc').insert({ user_id: state.perfil.id, texto: txt }).select().single();
+      var res = await sb.from('notas_bloc').insert({
+        user_id: state.perfil.id, texto: txt,
+        es_festivo: esFestivo,
+        hora_inicio: esFestivo ? horaInicio : null,
+        hora_fin: esFestivo ? horaFin : null,
+        horas_recuperables: horasRecuperables
+      }).select().single();
       if(res.error) throw res.error;
       state.apuntesBloc.unshift(res.data);
-      input.value = ''; render();
-      showToast('📝 Apunte guardado');
+      input.value = '';
+      e.target.querySelector('input[name="esFestivo"]').checked = false;
+      e.target.querySelector('input[name="horaInicio"]').value = '';
+      e.target.querySelector('input[name="horaFin"]').value = '';
+      render();
+      showToast(esFestivo ? ('🎉 Apunte guardado — ' + horasRecuperables + ' h recuperables') : '📝 Apunte guardado');
     }catch(err){ showToast('Error al guardar: ' + err.message); }
   }
 
@@ -1123,6 +1155,57 @@
       </div>';
   }
 
+  function renderCalendarioHorasRecuperables(){
+    var apuntesFestivos = state.apuntesBloc.filter(function(a){ return a.es_festivo && a.horas_recuperables; });
+    var totalHoras = apuntesFestivos.reduce(function(acc, a){ return acc + parseFloat(a.horas_recuperables); }, 0);
+
+    if(!state.calendarioMes){
+      var ahora = new Date();
+      state.calendarioMes = { anio: ahora.getFullYear(), mes: ahora.getMonth() };
+    }
+    var anio = state.calendarioMes.anio, mes = state.calendarioMes.mes;
+    var primerDiaSemana = (new Date(anio, mes, 1).getDay() + 6) % 7; // lunes=0
+    var diasEnMes = new Date(anio, mes+1, 0).getDate();
+    var nombreMes = new Date(anio, mes, 1).toLocaleDateString('es-ES', {month:'long', year:'numeric'});
+
+    var horasPorDia = {};
+    apuntesFestivos.forEach(function(a){
+      var f = new Date(a.created_at);
+      if(f.getFullYear() === anio && f.getMonth() === mes){
+        var dia = f.getDate();
+        horasPorDia[dia] = (horasPorDia[dia] || 0) + parseFloat(a.horas_recuperables);
+      }
+    });
+
+    var celdas = '';
+    for(var i=0; i<primerDiaSemana; i++){ celdas += '<div></div>'; }
+    for(var d=1; d<=diasEnMes; d++){
+      var horasDia = horasPorDia[d];
+      celdas += '\
+        <div style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;font-size:11px;' + (horasDia ? 'background:var(--primary-light);color:var(--primary);font-weight:700;' : 'color:var(--ink-soft);') + '">\
+          <div>' + d + '</div>\
+          ' + (horasDia ? '<div style="font-size:9px;">' + horasDia + 'h</div>' : '') + '\
+        </div>';
+    }
+    var diasSemana = ['L','M','X','J','V','S','D'].map(function(d){ return '<div style="text-align:center;font-size:10px;color:var(--ink-soft);">'+d+'</div>'; }).join('');
+
+    return '\
+      <div class="card" style="margin-top:14px;">\
+        <div class="row" style="justify-content:space-between;margin-bottom:8px;">\
+          <div><h3 style="font-size:16px;">🎉 Horas recuperables</h3><p class="hint">Total acumulado: <b>' + totalHoras + ' h</b></p></div>\
+        </div>\
+        <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px;">\
+          <button class="btn-ghost btn-sm" id="btn-mes-anterior">◀</button>\
+          <span style="text-transform:capitalize;font-size:13px;font-weight:600;">' + nombreMes + '</span>\
+          <button class="btn-ghost btn-sm" id="btn-mes-siguiente">▶</button>\
+        </div>\
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">' + diasSemana + celdas + '</div>\
+        ' + (apuntesFestivos.length ? '<div class="stack" style="gap:6px;margin-top:12px;">' + apuntesFestivos.slice(0,10).map(function(a){
+          return '<div class="hint">📅 ' + formatFecha(a.created_at).split(' ')[0] + ' · ' + a.hora_inicio.slice(0,5) + '–' + a.hora_fin.slice(0,5) + ' · <b>' + a.horas_recuperables + ' h</b></div>';
+        }).join('') + '</div>' : '<p class="empty">Todavía no hay horas en festivo registradas.</p>') + '\
+      </div>';
+  }
+
   function renderBlocSection(){
     var apuntesFiltrados = state.apuntesBloc;
     if(state.filtroFechaBloc){
@@ -1133,7 +1216,7 @@
     var lista = apuntesFiltrados.map(function(a){
       return '\
         <div class="comment-item" style="position:relative; padding-right:36px;">\
-          <div class="comment-author">' + formatFecha(a.created_at) + '</div>\
+          <div class="comment-author">' + formatFecha(a.created_at) + (a.es_festivo ? ' · 🎉 festivo (' + a.hora_inicio.slice(0,5) + '–' + a.hora_fin.slice(0,5) + ', ' + a.horas_recuperables + 'h)' : '') + '</div>\
           <div>' + a.texto.replace(/\n/g, '<br>') + '</div>\
           <button data-apunte-borrar="'+a.id+'" style="position:absolute; top:8px; right:8px; background:none; border:none; color:var(--ink-soft); font-size:14px; padding:2px;">🗑</button>\
         </div>';
@@ -1141,16 +1224,21 @@
     return '\
       <div class="card stack">\
         <div><h3 style="font-size:17px;">📝 Mi Bloc</h3><p class="hint" style="margin-top:4px;">Cada apunte se guarda con su fecha y hora, sin borrarse.</p></div>\
-        <form id="form-add-apunte" class="row">\
-          <input name="texto" placeholder="Ej: 40 sillas cargadas" required style="flex:1;">\
-          <button type="submit" class="btn-primary">Añadir</button>\
+        <form id="form-add-apunte" class="stack">\
+          <div class="row"><input name="texto" placeholder="Ej: 40 sillas cargadas" required style="flex:1;"><button type="submit" class="btn-primary">Añadir</button></div>\
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" name="esFestivo" id="check-es-festivo" style="width:auto;"> 🎉 Es un apunte en día festivo (horas recuperables)</label>\
+          <div class="row" id="campos-horario-festivo" style="display:none;">\
+            <div style="flex:1;"><label>Hora inicio</label><input type="time" name="horaInicio"></div>\
+            <div style="flex:1;"><label>Hora fin</label><input type="time" name="horaFin"></div>\
+          </div>\
         </form>\
         <div class="row">\
           <input type="date" id="filtro-fecha-bloc" value="' + (state.filtroFechaBloc || '') + '" style="flex:1;">\
           ' + (state.filtroFechaBloc ? '<button type="button" class="btn-ghost btn-sm" id="btn-limpiar-fecha-bloc">✕ Quitar filtro</button>' : '') + '\
         </div>\
         <div class="stack" style="gap:8px;">' + (apuntesFiltrados.length ? lista : '<p class="empty">' + (state.filtroFechaBloc ? 'No hay apuntes ese día.' : 'Todavía no hay apuntes.') + '</p>') + '</div>\
-      </div>';
+      </div>\
+      ' + renderCalendarioHorasRecuperables() + '';
   }
 
   function exportarInventarioExcel(){
@@ -1664,6 +1752,30 @@
     var formInv = document.getElementById('form-add-inv'); if(formInv) formInv.addEventListener('submit', handleAddInventario);
 
     var formApunte = document.getElementById('form-add-apunte'); if(formApunte) formApunte.addEventListener('submit', handleAddApunte);
+    var checkFestivo = document.getElementById('check-es-festivo');
+    if(checkFestivo){
+      checkFestivo.addEventListener('change', function(){
+        var campos = document.getElementById('campos-horario-festivo');
+        if(campos){
+          campos.style.display = checkFestivo.checked ? 'flex' : 'none';
+          campos.querySelectorAll('input').forEach(function(inp){ inp.required = checkFestivo.checked; });
+        }
+      });
+    }
+    var btnMesAnterior = document.getElementById('btn-mes-anterior');
+    if(btnMesAnterior){ btnMesAnterior.addEventListener('click', function(){
+      if(!state.calendarioMes){ var ahora=new Date(); state.calendarioMes={anio:ahora.getFullYear(), mes:ahora.getMonth()}; }
+      state.calendarioMes.mes--;
+      if(state.calendarioMes.mes < 0){ state.calendarioMes.mes = 11; state.calendarioMes.anio--; }
+      render();
+    }); }
+    var btnMesSiguiente = document.getElementById('btn-mes-siguiente');
+    if(btnMesSiguiente){ btnMesSiguiente.addEventListener('click', function(){
+      if(!state.calendarioMes){ var ahora=new Date(); state.calendarioMes={anio:ahora.getFullYear(), mes:ahora.getMonth()}; }
+      state.calendarioMes.mes++;
+      if(state.calendarioMes.mes > 11){ state.calendarioMes.mes = 0; state.calendarioMes.anio++; }
+      render();
+    }); }
     var filtroFechaBlocEl = document.getElementById('filtro-fecha-bloc');
     if(filtroFechaBlocEl){ filtroFechaBlocEl.addEventListener('change', function(){ state.filtroFechaBloc = filtroFechaBlocEl.value; render(); }); }
     var btnLimpiarFechaBloc = document.getElementById('btn-limpiar-fecha-bloc');
@@ -1730,6 +1842,10 @@
     if(fotoInicial && fotoInicial.files && fotoInicial.files.length > 0) return true;
     var fotoDespues = document.querySelector('#modal-cierre-form input[name="fotoDespues"]');
     if(fotoDespues && fotoDespues.files && fotoDespues.files.length > 0) return true;
+    var campoTextoApunte = document.querySelector('#form-add-apunte input[name="texto"]');
+    if(campoTextoApunte && campoTextoApunte.value.trim() !== '') return true;
+    var checkFestivoGuard = document.querySelector('#check-es-festivo');
+    if(checkFestivoGuard && checkFestivoGuard.checked) return true;
     if(state.modalCierreTaskId) return true;
     if(state.modalEditarTaskId) return true;
     if(state.mostrarCuenta) return true;
