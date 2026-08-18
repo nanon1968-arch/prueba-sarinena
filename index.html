@@ -161,6 +161,7 @@
   var BRIGADA_NOMBRE = 'Brigada de Sariñena';
 
   var ICONOS_SVG = {
+    documentos: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>',
     tareas: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="12" y2="18"/></svg>',
     equipo: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     stats: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
@@ -190,6 +191,7 @@
     apuntesBloc: [],
     historial: [],
     documentos: [],
+    documentosGenerales: [],
     error: '', toast: '', busy: false,
     principalTab: 'tareas',   // tareas, usuarios, inventario, bloc
     secondaryTab: 'tareas',   // tareas, inventario, bloc
@@ -241,6 +243,8 @@
     if(!resH.error) state.historial = resH.data || [];
     var resD = await sb.from('documentos_tarea').select('*').order('created_at', {ascending:true});
     if(!resD.error) state.documentos = resD.data || [];
+    var resDG = await sb.from('documentos_generales').select('*').order('created_at', {ascending:false});
+    if(!resDG.error) state.documentosGenerales = resDG.data || [];
   }
 
   async function cargarPerfil(userId){
@@ -791,6 +795,62 @@
     return '📄';
   }
 
+  async function handleAdjuntarDocumentoGeneral(file){
+    if(!file) return;
+    showToast('📎 Subiendo documento...');
+    try{
+      var extension = (file.name.split('.').pop() || 'archivo').toLowerCase();
+      var path = 'documentos-generales/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      var contenido = await file.arrayBuffer();
+      var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, contenido, { upsert: true, contentType: file.type || 'application/octet-stream' });
+      if(subida.error) throw subida.error;
+      var url = sb.storage.from(FOTOS_BUCKET).getPublicUrl(path).data.publicUrl;
+      var res = await sb.from('documentos_generales').insert({
+        user_id: state.perfil.id, nombre_archivo: file.name, url: url, tipo: extension
+      }).select().single();
+      if(res.error) throw res.error;
+      state.documentosGenerales.unshift(res.data);
+      showToast('✅ Documento subido');
+      render();
+    }catch(err){ showToast('Error al subir: ' + err.message); }
+  }
+
+  async function borrarDocumentoGeneral(id){
+    if(!confirm('¿Eliminar este documento para todos?')) return;
+    try{
+      await sb.from('documentos_generales').delete().eq('id', id);
+      state.documentosGenerales = state.documentosGenerales.filter(function(d){ return d.id !== id; });
+      render();
+    }catch(err){ showToast('Error al borrar'); }
+  }
+
+  function renderDocumentosGenerales(puedeSubir){
+    var lista = state.documentosGenerales.map(function(d){
+      return '\
+        <div class="ios-row">\
+          <a href="'+d.url+'" target="_blank" rel="noopener" style="color:var(--ink);text-decoration:none;flex:1;">\
+            <div class="ios-row-title">'+iconoDocumento(d.tipo)+' '+d.nombre_archivo+'</div>\
+            <div class="ios-row-sub">Subido por '+nombreDe(d.user_id)+' · '+formatFecha(d.created_at)+'</div>\
+          </a>\
+          ' + (puedeSubir ? '<button data-docgen-borrar="'+d.id+'" style="background:none;border:none;color:var(--red);font-size:14px;">🗑</button>' : '') + '\
+        </div>';
+    }).join('') || '<div class="ios-row"><span class="empty">Todavía no hay documentos.</span></div>';
+
+    var formSubida = puedeSubir ? '\
+      <label class="btn-primary btn-full" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;cursor:pointer;">\
+        📎 Subir documento (PDF, plano, Word, Excel...)\
+        <input type="file" id="input-documento-general" accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.dxf,image/*" style="display:none;">\
+      </label>' : '';
+
+    return '\
+      <div>\
+        <h3 style="font-size:17px;margin-bottom:12px;">📁 Documentos</h3>\
+        <p class="hint" style="margin-bottom:14px;">Documentos generales de la brigada, no ligados a una tarea concreta (circulares, planos, presupuestos...).</p>\
+        ' + formSubida + '\
+        <div class="ios-list">' + lista + '</div>\
+      </div>';
+  }
+
   async function handleEditarTarea(e){
     e.preventDefault();
     var fd = new FormData(e.target);
@@ -939,11 +999,12 @@
     var esFestivo = e.target.querySelector('input[name="esFestivo"]').checked;
     var horaInicio = e.target.querySelector('input[name="horaInicio"]').value;
     var horaFin = e.target.querySelector('input[name="horaFin"]').value;
+    var fechaFestivo = e.target.querySelector('input[name="fechaFestivo"]').value;
     var txt = input.value.trim();
     if(!txt) return;
 
-    if(esFestivo && (!horaInicio || !horaFin)){
-      showToast('⚠️ Indica hora de inicio y de fin para un apunte en festivo');
+    if(esFestivo && (!horaInicio || !horaFin || !fechaFestivo)){
+      showToast('⚠️ Indica fecha, hora de inicio y de fin para un apunte en festivo');
       return;
     }
 
@@ -960,21 +1021,28 @@
     }
 
     try{
-      var res = await sb.from('notas_bloc').insert({
+      var datosApunte = {
         user_id: state.perfil.id, texto: txt,
         es_festivo: esFestivo,
         hora_inicio: esFestivo ? horaInicio : null,
         hora_fin: esFestivo ? horaFin : null,
         horas_recuperables: horasRecuperables
-      }).select().single();
+      };
+      if(esFestivo && fechaFestivo){
+        // Guardamos el apunte con la fecha real del festivo, no la de hoy
+        datosApunte.created_at = new Date(fechaFestivo + 'T' + horaInicio + ':00').toISOString();
+      }
+      var res = await sb.from('notas_bloc').insert(datosApunte).select().single();
       if(res.error) throw res.error;
-      state.apuntesBloc.unshift(res.data);
+      state.apuntesBloc.push(res.data);
+      state.apuntesBloc.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
       input.value = '';
       e.target.querySelector('input[name="esFestivo"]').checked = false;
       e.target.querySelector('input[name="horaInicio"]').value = '';
       e.target.querySelector('input[name="horaFin"]').value = '';
+      e.target.querySelector('input[name="fechaFestivo"]').value = new Date().toISOString().slice(0,10);
       render();
-      showToast(esFestivo ? ('🎉 Apunte guardado — ' + horasRecuperables + ' h recuperables') : '📝 Apunte guardado');
+      showToast(esFestivo ? ('🎉 Apunte guardado (' + fechaFestivo + ') — ' + horasRecuperables + ' h recuperables') : '📝 Apunte guardado');
     }catch(err){ showToast('Error al guardar: ' + err.message); }
   }
 
@@ -1227,9 +1295,13 @@
         <form id="form-add-apunte" class="stack">\
           <div class="row"><input name="texto" placeholder="Ej: 40 sillas cargadas" required style="flex:1;"><button type="submit" class="btn-primary">Añadir</button></div>\
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" name="esFestivo" id="check-es-festivo" style="width:auto;"> 🎉 Es un apunte en día festivo (horas recuperables)</label>\
-          <div class="row" id="campos-horario-festivo" style="display:none;">\
-            <div style="flex:1;"><label>Hora inicio</label><input type="time" name="horaInicio"></div>\
-            <div style="flex:1;"><label>Hora fin</label><input type="time" name="horaFin"></div>\
+          <div class="stack" id="campos-horario-festivo" style="display:none;">\
+            <div><label>Fecha del festivo</label><input type="date" name="fechaFestivo" value="' + new Date().toISOString().slice(0,10) + '"></div>\
+            <div class="row">\
+              <div style="flex:1;"><label>Hora inicio</label><input type="time" name="horaInicio"></div>\
+              <div style="flex:1;"><label>Hora fin</label><input type="time" name="horaFin"></div>\
+            </div>\
+            <p class="hint">Si se te olvidó apuntarlo el mismo día, cambia la fecha por la del festivo real.</p>\
           </div>\
         </form>\
         <div class="row">\
@@ -1470,6 +1542,7 @@
     else if(tab === 'inventario'){ htmlContent = renderInventarioSection(true); }
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
     else if(tab === 'stats'){ htmlContent = renderEstadisticas(); }
+    else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(true); }
 
     return '\
       <div class="top-header"><div><p class="eyebrow">Jefatura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
@@ -1482,6 +1555,7 @@
         <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">' + iconoTab('equipo') + '</span>Equipo</button>\
         <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
         <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
+        <button class="ios-tab '+(tab==='documentos'?'active':'')+'" data-tab="documentos"><span class="tab-icon">' + iconoTab('documentos') + '</span>Docs</button>\
         <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
       </div>';
   }
@@ -1540,6 +1614,7 @@
     else if(tab === 'inventario'){ htmlContent = renderInventarioSection(true); }
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
     else if(tab === 'stats'){ htmlContent = renderEstadisticas(); }
+    else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(true); }
 
     return '\
       <div class="top-header"><div><p class="eyebrow">Admin</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
@@ -1552,6 +1627,7 @@
         <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">' + iconoTab('usuarios') + '</span>Usuarios</button>\
         <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
         <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
+        <button class="ios-tab '+(tab==='documentos'?'active':'')+'" data-tab="documentos"><span class="tab-icon">' + iconoTab('documentos') + '</span>Docs</button>\
         <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
       </div>';
   }
@@ -1581,6 +1657,7 @@
       htmlContent = renderFilterBar() + '<div class="grid">' + (tasks.length ? tasks.map(function(t){ return taskCard(t, false, true); }).join('') : '<div class="empty">No hay tareas.</div>') + '</div>';
     } else if(tab === 'stats'){ htmlContent = renderEstadisticas(); }
     else if(tab === 'inventario'){ htmlContent = renderInventarioSection(false); }
+    else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(false); }
 
     return '\
       <div class="top-header"><div><p class="eyebrow">Solo lectura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
@@ -1589,6 +1666,7 @@
         <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Tareas</button>\
         <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
         <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
+        <button class="ios-tab '+(tab==='documentos'?'active':'')+'" data-tab="documentos"><span class="tab-icon">' + iconoTab('documentos') + '</span>Docs</button>\
       </div>';
   }
 
@@ -1602,6 +1680,7 @@
       htmlContent = badgeCard(u) + '<div style="margin:12px 0;"><button class="btn-ghost btn-full" data-toggle-disp>Cambiar a '+(u.disponible?'Ocupado':'Disponible')+'</button><button class="btn-ghost btn-full" id="btn-activar-push" style="margin-top:8px;">🔔 Activar notificaciones</button><button class="btn-ghost btn-full" id="btn-tema" style="margin-top:8px;">🌗 Cambiar tema</button></div>' + renderFilterBar() + '<div class="grid">' + (tasks.length ? conSeparadoresDeFecha(tasks, 'created_at', function(t){return taskCard(t,false);}) : '<div class="empty">Sin tareas asignadas.</div>') + '</div>';
     } else if(tab === 'inventario'){ htmlContent = renderInventarioSection(false); }
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
+    else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(false); }
 
     return '\
       <div class="top-header"><div><p class="eyebrow">' + BRIGADA_NOMBRE + '</p><div class="company-name">Mi perfil</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
@@ -1609,6 +1688,7 @@
       <div class="ios-tabbar">\
         <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-sectab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Tareas</button>\
         <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-sectab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
+        <button class="ios-tab '+(tab==='documentos'?'active':'')+'" data-sectab="documentos"><span class="tab-icon">' + iconoTab('documentos') + '</span>Docs</button>\
         <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-sectab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
       </div>';
   }
@@ -1746,6 +1826,14 @@
       });
     });
     app.querySelectorAll('[data-doc-borrar]').forEach(function(btn){ btn.addEventListener('click', function(){ borrarDocumento(btn.getAttribute('data-doc-borrar')); }); });
+    var inputDocGeneral = document.getElementById('input-documento-general');
+    if(inputDocGeneral){
+      inputDocGeneral.addEventListener('change', function(){
+        var file = inputDocGeneral.files && inputDocGeneral.files[0];
+        if(file){ handleAdjuntarDocumentoGeneral(file); }
+      });
+    }
+    app.querySelectorAll('[data-docgen-borrar]').forEach(function(btn){ btn.addEventListener('click', function(){ borrarDocumentoGeneral(btn.getAttribute('data-docgen-borrar')); }); });
 
     app.querySelectorAll('.inv-btn[data-inv-id]').forEach(function(btn){ btn.addEventListener('click', function(){ handleUpdateInventario(btn.getAttribute('data-inv-id'), parseInt(btn.getAttribute('data-inv-val'))); }); });
     app.querySelectorAll('[data-inv-borrar]').forEach(function(btn){ btn.addEventListener('click', function(){ eliminarMaterialDefinitivo(btn.getAttribute('data-inv-borrar')); }); });
