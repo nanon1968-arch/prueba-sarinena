@@ -36,6 +36,8 @@
     --primary:#007AFF; --primary-dark:#0051D5; --primary-light:rgba(0,122,255,0.12);
     --border:#D1D1D6;
   }
+  body.letra-grande{ zoom:1.15; }
+  body.letra-muy-grande{ zoom:1.3; }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
   body{background:var(--bg);color:var(--ink);font-family:var(--font-body);min-height:100vh;-webkit-font-smoothing:antialiased;}
@@ -161,6 +163,7 @@
   var BRIGADA_NOMBRE = 'Brigada de Sariñena';
 
   var ICONOS_SVG = {
+    propias: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
     documentos: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>',
     tareas: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="12" y2="18"/></svg>',
     equipo: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
@@ -223,6 +226,25 @@
     localStorage.setItem('brigada_tema', esClaro ? 'claro' : 'oscuro');
   }
   aplicarTemaGuardado();
+
+  var TAMANOS_LETRA = ['normal', 'grande', 'muy-grande'];
+  function aplicarTamanoLetraGuardado(){
+    var guardado = localStorage.getItem('brigada_tamano_letra');
+    if(guardado && TAMANOS_LETRA.indexOf(guardado) !== -1 && guardado !== 'normal'){
+      document.body.classList.add('letra-' + guardado);
+    }
+  }
+  function cambiarTamanoLetra(){
+    var actual = localStorage.getItem('brigada_tamano_letra') || 'normal';
+    var idx = TAMANOS_LETRA.indexOf(actual);
+    var siguiente = TAMANOS_LETRA[(idx + 1) % TAMANOS_LETRA.length];
+    TAMANOS_LETRA.forEach(function(t){ document.body.classList.remove('letra-' + t); });
+    if(siguiente !== 'normal'){ document.body.classList.add('letra-' + siguiente); }
+    localStorage.setItem('brigada_tamano_letra', siguiente);
+    var nombres = { normal: 'Normal', grande: 'Grande', 'muy-grande': 'Muy grande' };
+    showToast('🔤 Tamaño de letra: ' + nombres[siguiente]);
+  }
+  aplicarTamanoLetraGuardado();
 
   function showToast(msg){
     state.toast = msg; render();
@@ -696,6 +718,67 @@
   function logout(){
     sb.auth.signOut();
     location.reload();
+  }
+
+  async function handleAddTareaPropia(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var file = e.target.querySelector('[name="fotoPropia"]').files[0];
+    var btn = e.target.querySelector('button[type="submit"]');
+    if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
+    state.busy = true;
+    try{
+      var destinatarios = state.usuarios.filter(function(u){ return (u.rol === 'principal' || u.rol === 'administrador') && u.status === 'activo'; });
+      if(destinatarios.length === 0){
+        showToast('⚠️ No hay ninguna jefatura activa a quien enviarla');
+        state.busy = false; if(btn){ btn.disabled=false; btn.textContent='Enviar a jefatura'; } render();
+        return;
+      }
+      var fotoUrl = null;
+      if(file){
+        var path = 'antes/' + Date.now() + '.jpg';
+        var contenido = await file.arrayBuffer();
+        var subida = await sb.storage.from(FOTOS_BUCKET).upload(path, contenido, { upsert: true, contentType: file.type || 'image/jpeg' });
+        if(subida.error){ throw new Error('Fallo al subir la foto: ' + subida.error.message); }
+        fotoUrl = sb.storage.from(FOTOS_BUCKET).getPublicUrl(path).data.publicUrl;
+      }
+      var titulo = fd.get('titulo').trim();
+      var descripcion = fd.get('descripcion').trim();
+      var loteId = destinatarios.length > 1 ? genId('lote') : null;
+      var filas = destinatarios.map(function(dest){
+        return {
+          titulo: titulo, descripcion: descripcion, assigned_to: dest.id, categoria: 'Aviso de operario',
+          urgencia: fd.get('urgenciaPropia') === 'on', status: 'pendiente', created_by: state.perfil.id,
+          foto_url: fotoUrl, lote_id: loteId
+        };
+      });
+      var res = await sb.from('tareas').insert(filas).select();
+      if(res.error) throw res.error;
+      res.data.forEach(function(fila){ state.tareas.unshift(fila); });
+      e.target.reset();
+      showToast('📨 Enviado a la jefatura');
+    }catch(err){
+      showToast('Error: ' + err.message);
+    }
+    state.busy = false; render();
+  }
+
+  function renderTareasPropias(){
+    var misEnvios = state.tareas.filter(function(t){ return t.created_by === state.perfil.id && t.assigned_to !== state.perfil.id; });
+    var lista = conSeparadoresDeFecha(misEnvios, 'created_at', function(t){ return taskCard(t, false); });
+    return '\
+      <div class="card stack" style="margin-bottom:14px;">\
+        <div><h3 style="font-size:17px;">📨 Enviar tarea a la jefatura</h3><p class="hint" style="margin-top:4px;">Para avisar de algo que hay que hacer, sin esperar a que te lo asignen.</p></div>\
+        <form id="form-add-tarea-propia" class="stack">\
+          <div class="field" style="margin:0;"><input name="titulo" placeholder="¿Qué hay que hacer?" required></div>\
+          <div class="field" style="margin:0;"><textarea name="descripcion" placeholder="Detalles (opcional)"></textarea></div>\
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" name="urgenciaPropia" style="width:auto;"> 🚨 Es urgente</label>\
+          <input type="file" name="fotoPropia" accept="image/*" style="padding:6px;font-size:12px;">\
+          <button type="submit" class="btn-primary btn-full">Enviar a jefatura</button>\
+        </form>\
+      </div>\
+      <p class="eyebrow">Lo que has enviado (' + misEnvios.length + ')</p>\
+      <div class="grid">' + (misEnvios.length ? lista : '<div class="empty">Todavía no has enviado ninguna tarea a la jefatura.</div>') + '</div>';
   }
 
   async function handleAddTask(e){
@@ -1681,12 +1764,14 @@
     } else if(tab === 'inventario'){ htmlContent = renderInventarioSection(false); }
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
     else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(false); }
+    else if(tab === 'propias'){ htmlContent = renderTareasPropias(); }
 
     return '\
       <div class="top-header"><div><p class="eyebrow">' + BRIGADA_NOMBRE + '</p><div class="company-name">Mi perfil</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll">' + htmlContent + '</div>\
       <div class="ios-tabbar">\
         <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-sectab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Tareas</button>\
+        <button class="ios-tab '+(tab==='propias'?'active':'')+'" data-sectab="propias"><span class="tab-icon">' + iconoTab('propias') + '</span>Propias</button>\
         <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-sectab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
         <button class="ios-tab '+(tab==='documentos'?'active':'')+'" data-sectab="documentos"><span class="tab-icon">' + iconoTab('documentos') + '</span>Docs</button>\
         <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-sectab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
@@ -1758,10 +1843,16 @@
         </div></div>';
     }
     if(state.mostrarCuenta){
+      var nombresTamano = { normal: 'Normal', grande: 'Grande', 'muy-grande': 'Muy grande' };
+      var tamanoActual = localStorage.getItem('brigada_tamano_letra') || 'normal';
       html += '\
         <div class="cierre-form-modal"><div class="card stack" style="width:100%; max-width:400px;">\
           <div class="row" style="justify-content:space-between;"><h3>Mi cuenta</h3><button id="btn-cerrar-cuenta" style="background:none;border:none;color:var(--ink-soft);font-size:20px;">✕</button></div>\
           <p class="hint">Cuenta: ' + (state.perfil ? state.perfil.nombre : '') + '</p>\
+          <div class="row" style="border-top:1px solid var(--border);padding-top:12px;">\
+            <button class="btn-ghost" style="flex:1;" id="btn-tema-cuenta">🌗 Cambiar tema</button>\
+            <button class="btn-ghost" style="flex:1;" id="btn-tamano-letra">🔤 Letra: ' + nombresTamano[tamanoActual] + '</button>\
+          </div>\
           <form id="cambiar-password-form" class="stack" style="border-top:1px solid var(--border);padding-top:12px;">\
             <label>Cambiar contraseña</label>\
             <input name="nuevaPassword" type="password" placeholder="Nueva contraseña (mín. 6)" required>\
@@ -1887,6 +1978,8 @@
     var cambiarEmailForm = document.getElementById('cambiar-email-form'); if(cambiarEmailForm) cambiarEmailForm.addEventListener('submit', handleCambiarEmail);
     var btnCuenta = document.getElementById('btn-mi-cuenta'); if(btnCuenta) btnCuenta.addEventListener('click', function(){ state.mostrarCuenta = !state.mostrarCuenta; render(); });
     var btnCerrarCuenta = document.getElementById('btn-cerrar-cuenta'); if(btnCerrarCuenta) btnCerrarCuenta.addEventListener('click', function(){ state.mostrarCuenta = false; render(); });
+    var btnTemaCuenta = document.getElementById('btn-tema-cuenta'); if(btnTemaCuenta) btnTemaCuenta.addEventListener('click', alternarTema);
+    var btnTamanoLetra = document.getElementById('btn-tamano-letra'); if(btnTamanoLetra) btnTamanoLetra.addEventListener('click', function(){ cambiarTamanoLetra(); render(); });
     var btnVerAviso = document.getElementById('btn-ver-aviso-legal'); if(btnVerAviso) btnVerAviso.addEventListener('click', function(){ state.mostrarAvisoLegal = true; render(); });
     var btnVerAvisoFooter = document.getElementById('btn-ver-aviso-legal-footer'); if(btnVerAvisoFooter) btnVerAvisoFooter.addEventListener('click', function(){ state.mostrarAvisoLegal = true; render(); });
     var btnCerrarAviso = document.getElementById('btn-cerrar-aviso-legal'); if(btnCerrarAviso) btnCerrarAviso.addEventListener('click', function(){ state.mostrarAvisoLegal = false; render(); });
@@ -1900,6 +1993,7 @@
       });
     }
     var atf = document.getElementById('add-task-form'); if(atf) atf.addEventListener('submit', handleAddTask);
+    var atpf = document.getElementById('form-add-tarea-propia'); if(atpf) atpf.addEventListener('submit', handleAddTareaPropia);
     var mcf = document.getElementById('modal-cierre-form'); if(mcf) mcf.addEventListener('submit', handleCerrarTarea);
     var cmb = document.getElementById('close-modal-btn'); if(cmb) cmb.addEventListener('click', function(){ state.modalCierreTaskId = null; render(); });
     app.querySelectorAll('[data-task-editar]').forEach(function(n){ n.addEventListener('click', function(){ state.modalEditarTaskId = n.getAttribute('data-task-editar'); render(); }); });
@@ -1932,6 +2026,8 @@
     if(fotoDespues && fotoDespues.files && fotoDespues.files.length > 0) return true;
     var campoTextoApunte = document.querySelector('#form-add-apunte input[name="texto"]');
     if(campoTextoApunte && campoTextoApunte.value.trim() !== '') return true;
+    var campoTituloPropia = document.querySelector('#form-add-tarea-propia input[name="titulo"]');
+    if(campoTituloPropia && campoTituloPropia.value.trim() !== '') return true;
     var checkFestivoGuard = document.querySelector('#check-es-festivo');
     if(checkFestivoGuard && checkFestivoGuard.checked) return true;
     if(state.modalCierreTaskId) return true;
