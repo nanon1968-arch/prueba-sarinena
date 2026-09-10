@@ -117,9 +117,9 @@
     padding-bottom:env(safe-area-inset-bottom);
     background:rgba(28,28,30,0.86);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
     border-top:1px solid var(--border);
-    display:flex;z-index:100;
+    display:flex;z-index:100;overflow-x:auto;-webkit-overflow-scrolling:touch;
   }
-  .ios-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;color:var(--ink-soft);font-size:10.5px;font-weight:500;padding:6px 2px 4px;border-radius:0;}
+  .ios-tab{flex:1 0 auto;min-width:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;color:var(--ink-soft);font-size:10.5px;font-weight:500;padding:6px 4px 4px;border-radius:0;}
   .ios-tab .tab-icon{display:flex;align-items:center;justify-content:center;line-height:1;}
   .ios-tab .tab-icon svg{display:block;}
   .ios-tab.active{color:var(--primary);}
@@ -164,6 +164,7 @@
 
   var ICONOS_SVG = {
     propias: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+    aguas: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69s-5.5 6.16-5.5 10.31a5.5 5.5 0 0 0 11 0c0-4.15-5.5-10.31-5.5-10.31Z"/></svg>',
     documentos: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>',
     tareas: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="12" y2="18"/></svg>',
     equipo: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
@@ -195,6 +196,8 @@
     historial: [],
     documentos: [],
     documentosGenerales: [],
+    puntosAgua: [],
+    aguasSubTab: 'llaves',
     error: '', toast: '', busy: false,
     principalTab: 'tareas',   // tareas, usuarios, inventario, bloc
     secondaryTab: 'tareas',   // tareas, inventario, bloc
@@ -267,6 +270,8 @@
     if(!resD.error) state.documentos = resD.data || [];
     var resDG = await sb.from('documentos_generales').select('*').order('created_at', {ascending:false});
     if(!resDG.error) state.documentosGenerales = resDG.data || [];
+    var resPA = await sb.from('puntos_agua').select('*').order('nombre', {ascending:true});
+    if(!resPA.error) state.puntosAgua = resPA.data || [];
   }
 
   async function cargarPerfil(userId){
@@ -728,7 +733,7 @@
     if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
     state.busy = true;
     try{
-      var destinatarios = state.usuarios.filter(function(u){ return (u.rol === 'principal' || u.rol === 'administrador') && u.status === 'activo'; });
+      var destinatarios = state.usuarios.filter(function(u){ return u.rol === 'principal' && u.status === 'activo'; });
       if(destinatarios.length === 0){
         showToast('⚠️ No hay ninguna jefatura activa a quien enviarla');
         state.busy = false; if(btn){ btn.disabled=false; btn.textContent='Enviar a jefatura'; } render();
@@ -867,6 +872,108 @@
       state.documentos = state.documentos.filter(function(d){ return d.id !== id; });
       render();
     }catch(err){ showToast('Error al borrar'); }
+  }
+
+  async function handleAddPuntoAgua(tipo){
+    if(!('geolocation' in navigator)){ showToast('Este dispositivo no permite geolocalización'); return; }
+    var nombre = prompt(tipo === 'llave_paso' ? 'Nombre/referencia de la llave (ej. "Llave C/ Mayor 12")' : 'Nombre/referencia del programador (ej. "Programador Parque Central")');
+    if(!nombre || !nombre.trim()) return;
+    var poblacion = prompt('Población (opcional, ej. Sariñena)') || '';
+    showToast('📍 Obteniendo ubicación...');
+    navigator.geolocation.getCurrentPosition(async function(pos){
+      try{
+        var res = await sb.from('puntos_agua').insert({
+          tipo: tipo, nombre: nombre.trim(), poblacion: poblacion.trim() || null,
+          latitud: pos.coords.latitude, longitud: pos.coords.longitude,
+          estado: 'abierta', creado_por: state.perfil.id
+        }).select().single();
+        if(res.error) throw res.error;
+        state.puntosAgua.push(res.data);
+        state.puntosAgua.sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
+        showToast('✅ Punto guardado con su ubicación');
+        render();
+      }catch(err){ showToast('Error: ' + err.message); }
+    }, function(){
+      showToast('⚠️ No se pudo obtener la ubicación. Comprueba los permisos de localización.');
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  }
+
+  async function toggleEstadoLlave(id){
+    var punto = state.puntosAgua.find(function(p){ return p.id === id; });
+    if(!punto) return;
+    var nuevoEstado = punto.estado === 'abierta' ? 'cerrada' : 'abierta';
+    try{
+      var cambios = { estado: nuevoEstado };
+      if(nuevoEstado === 'cerrada'){
+        cambios.cerrado_por = state.perfil.id;
+        cambios.cerrado_en = new Date().toISOString();
+      } else {
+        cambios.cerrado_por = null;
+        cambios.cerrado_en = null;
+      }
+      var res = await sb.from('puntos_agua').update(cambios).eq('id', id).select().single();
+      if(res.error) throw res.error;
+      var idx = state.puntosAgua.findIndex(function(p){ return p.id === id; });
+      if(idx !== -1) state.puntosAgua[idx] = res.data;
+      showToast(nuevoEstado === 'cerrada' ? '🔴 Llave marcada como cerrada' : '🟢 Llave marcada como abierta');
+      render();
+    }catch(err){ showToast('Error: ' + err.message); }
+  }
+
+  async function eliminarPuntoAgua(id){
+    if(!confirm('¿Eliminar este punto para siempre?')) return;
+    try{
+      await sb.from('puntos_agua').delete().eq('id', id);
+      state.puntosAgua = state.puntosAgua.filter(function(p){ return p.id !== id; });
+      render();
+    }catch(err){ showToast('Error al borrar'); }
+  }
+
+  function renderAguas(soloLectura){
+    var sub = state.aguasSubTab;
+    var llaves = state.puntosAgua.filter(function(p){ return p.tipo === 'llave_paso'; });
+    var programadores = state.puntosAgua.filter(function(p){ return p.tipo === 'programador_riego'; });
+    var cerradas = llaves.filter(function(p){ return p.estado === 'cerrada'; });
+
+    var listaHtml = '';
+    if(sub === 'llaves'){
+      listaHtml = llaves.length ? llaves.map(function(p){
+        var esCerrada = p.estado === 'cerrada';
+        return '\
+          <div class="ios-row" style="flex-wrap:wrap;">\
+            <div class="ios-row-main">\
+              <div class="ios-row-title">'+(esCerrada?'🔴':'🟢')+' '+p.nombre+'</div>\
+              <div class="ios-row-sub">'+(p.poblacion||'sin población')+(esCerrada ? (' · cerrada por '+nombreDe(p.cerrado_por)+' · '+formatFecha(p.cerrado_en)) : '')+'</div>\
+              <a href="https://www.google.com/maps/dir/?api=1&destination='+p.latitud+','+p.longitud+'&travelmode=driving" target="_blank" class="gps-badge">📍 Cómo llegar</a>\
+            </div>\
+            ' + (soloLectura ? '' : ('<button class="btn-ghost btn-sm" data-toggle-llave="'+p.id+'">'+(esCerrada ? '🟢 Abrir' : '🔴 Cerrar')+'</button><button class="btn-danger-ghost btn-sm" data-borrar-punto-agua="'+p.id+'">🗑</button>')) + '\
+          </div>';
+      }).join('') : '<div class="ios-row"><span class="empty">Todavía no hay llaves registradas.</span></div>';
+    } else {
+      listaHtml = programadores.length ? programadores.map(function(p){
+        return '\
+          <div class="ios-row" style="flex-wrap:wrap;">\
+            <div class="ios-row-main">\
+              <div class="ios-row-title">🌿 '+p.nombre+'</div>\
+              <div class="ios-row-sub">'+(p.poblacion||'sin población')+'</div>\
+              <a href="https://www.google.com/maps/dir/?api=1&destination='+p.latitud+','+p.longitud+'&travelmode=driving" target="_blank" class="gps-badge">📍 Cómo llegar</a>\
+            </div>\
+            ' + (soloLectura ? '' : '<button class="btn-danger-ghost btn-sm" data-borrar-punto-agua="'+p.id+'">🗑</button>') + '\
+          </div>';
+      }).join('') : '<div class="ios-row"><span class="empty">Todavía no hay programadores registrados.</span></div>';
+    }
+
+    return '\
+      <div class="card" style="margin-bottom:14px; text-align:center;'+(cerradas.length ? 'border-color:var(--red);' : '')+'">\
+        <div style="font-size:26px;font-weight:700;'+(cerradas.length ? 'color:var(--red);' : '')+'">' + cerradas.length + '</div>\
+        <div class="hint">llave' + (cerradas.length===1?'':'s') + ' cerrada' + (cerradas.length===1?'':'s') + ' ahora mismo</div>\
+      </div>\
+      <div class="tab-bar" style="margin-bottom:14px;">\
+        <button class="filter-btn '+(sub==='llaves'?'active':'')+'" data-aguas-tab="llaves">🚰 Llaves de paso</button>\
+        <button class="filter-btn '+(sub==='programadores'?'active':'')+'" data-aguas-tab="programadores">🌿 Programadores</button>\
+      </div>\
+      ' + (soloLectura ? '' : ('<button class="btn-primary btn-full" id="btn-add-punto-agua" style="margin-bottom:14px;">📍 ' + (sub==='llaves' ? 'Añadir llave aquí (con mi ubicación)' : 'Añadir programador aquí (con mi ubicación)') + '</button>')) + '\
+      <div class="ios-list">' + listaHtml + '</div>';
   }
 
   function iconoDocumento(tipo){
@@ -1626,6 +1733,7 @@
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
     else if(tab === 'stats'){ htmlContent = renderEstadisticas(); }
     else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(true); }
+    else if(tab === 'aguas'){ htmlContent = renderAguas(); }
 
     return '\
       <div class="top-header"><div><p class="eyebrow">Jefatura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
@@ -1638,6 +1746,7 @@
         <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">' + iconoTab('equipo') + '</span>Equipo</button>\
         <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
         <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
+        <button class="ios-tab '+(tab==='aguas'?'active':'')+'" data-tab="aguas"><span class="tab-icon">' + iconoTab('aguas') + '</span>Aguas</button>\
         <button class="ios-tab '+(tab==='documentos'?'active':'')+'" data-tab="documentos"><span class="tab-icon">' + iconoTab('documentos') + '</span>Docs</button>\
         <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
       </div>';
@@ -1698,6 +1807,7 @@
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
     else if(tab === 'stats'){ htmlContent = renderEstadisticas(); }
     else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(true); }
+    else if(tab === 'aguas'){ htmlContent = renderAguas(); }
 
     return '\
       <div class="top-header"><div><p class="eyebrow">Admin</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
@@ -1710,6 +1820,7 @@
         <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">' + iconoTab('usuarios') + '</span>Usuarios</button>\
         <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
         <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
+        <button class="ios-tab '+(tab==='aguas'?'active':'')+'" data-tab="aguas"><span class="tab-icon">' + iconoTab('aguas') + '</span>Aguas</button>\
         <button class="ios-tab '+(tab==='documentos'?'active':'')+'" data-tab="documentos"><span class="tab-icon">' + iconoTab('documentos') + '</span>Docs</button>\
         <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
       </div>';
@@ -1741,6 +1852,7 @@
     } else if(tab === 'stats'){ htmlContent = renderEstadisticas(); }
     else if(tab === 'inventario'){ htmlContent = renderInventarioSection(false); }
     else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(false); }
+    else if(tab === 'aguas'){ htmlContent = renderAguas(true); }
 
     return '\
       <div class="top-header"><div><p class="eyebrow">Solo lectura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
@@ -1749,6 +1861,7 @@
         <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Tareas</button>\
         <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
         <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
+        <button class="ios-tab '+(tab==='aguas'?'active':'')+'" data-tab="aguas"><span class="tab-icon">' + iconoTab('aguas') + '</span>Aguas</button>\
         <button class="ios-tab '+(tab==='documentos'?'active':'')+'" data-tab="documentos"><span class="tab-icon">' + iconoTab('documentos') + '</span>Docs</button>\
       </div>';
   }
@@ -1765,6 +1878,7 @@
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
     else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(false); }
     else if(tab === 'propias'){ htmlContent = renderTareasPropias(); }
+    else if(tab === 'aguas'){ htmlContent = renderAguas(false); }
 
     return '\
       <div class="top-header"><div><p class="eyebrow">' + BRIGADA_NOMBRE + '</p><div class="company-name">Mi perfil</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
@@ -1772,6 +1886,7 @@
       <div class="ios-tabbar">\
         <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-sectab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Tareas</button>\
         <button class="ios-tab '+(tab==='propias'?'active':'')+'" data-sectab="propias"><span class="tab-icon">' + iconoTab('propias') + '</span>Propias</button>\
+        <button class="ios-tab '+(tab==='aguas'?'active':'')+'" data-sectab="aguas"><span class="tab-icon">' + iconoTab('aguas') + '</span>Aguas</button>\
         <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-sectab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
         <button class="ios-tab '+(tab==='documentos'?'active':'')+'" data-sectab="documentos"><span class="tab-icon">' + iconoTab('documentos') + '</span>Docs</button>\
         <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-sectab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
@@ -1964,6 +2079,11 @@
     var btnExport = document.getElementById('btn-export'); if(btnExport) btnExport.addEventListener('click', exportarAExcel);
     var btnExportPdf = document.getElementById('btn-export-pdf'); if(btnExportPdf) btnExportPdf.addEventListener('click', exportarAPDF);
     var btnExportInv = document.getElementById('btn-export-inv'); if(btnExportInv) btnExportInv.addEventListener('click', exportarInventarioExcel);
+    app.querySelectorAll('[data-aguas-tab]').forEach(function(n){ n.addEventListener('click', function(){ state.aguasSubTab = n.getAttribute('data-aguas-tab'); render(); }); });
+    var btnAddPuntoAgua = document.getElementById('btn-add-punto-agua');
+    if(btnAddPuntoAgua){ btnAddPuntoAgua.addEventListener('click', function(){ handleAddPuntoAgua(state.aguasSubTab === 'llaves' ? 'llave_paso' : 'programador_riego'); }); }
+    app.querySelectorAll('[data-toggle-llave]').forEach(function(n){ n.addEventListener('click', function(){ toggleEstadoLlave(n.getAttribute('data-toggle-llave')); }); });
+    app.querySelectorAll('[data-borrar-punto-agua]').forEach(function(n){ n.addEventListener('click', function(){ eliminarPuntoAgua(n.getAttribute('data-borrar-punto-agua')); }); });
     var btnBackup = document.getElementById('btn-backup'); if(btnBackup) btnBackup.addEventListener('click', generarCopiaSeguridad);
     app.querySelectorAll('[data-restaurar-tarea]').forEach(function(n){ n.addEventListener('click', function(){ restaurarTarea(n.getAttribute('data-restaurar-tarea')); }); });
     app.querySelectorAll('[data-borrar-definitivo]').forEach(function(n){ n.addEventListener('click', function(){ eliminarTareaDefinitivo(n.getAttribute('data-borrar-definitivo')); }); });
