@@ -249,6 +249,15 @@
   }
   aplicarTamanoLetraGuardado();
 
+  function necesitaActivarNotificaciones(){
+    return ('Notification' in window) && Notification.permission !== 'granted';
+  }
+
+  function botonNotificacionesHtml(estiloBoton, estiloInline){
+    if(!necesitaActivarNotificaciones()) return '';
+    return '<button class="' + estiloBoton + '"' + (estiloInline ? (' style="'+estiloInline+'"') : '') + ' id="btn-activar-push">🔔 Activar notificaciones</button>';
+  }
+
   function showToast(msg){
     state.toast = msg; render();
     setTimeout(function(){ state.toast=''; render(); }, 2600);
@@ -902,6 +911,7 @@
     var punto = state.puntosAgua.find(function(p){ return p.id === id; });
     if(!punto) return;
     var nuevoEstado = punto.estado === 'abierta' ? 'cerrada' : 'abierta';
+    if(!confirm('¿Estás seguro de marcar "' + punto.nombre + '" como ' + (nuevoEstado === 'cerrada' ? 'cerrada' : 'abierta') + '?')) return;
     try{
       var cambios = { estado: nuevoEstado };
       if(nuevoEstado === 'cerrada'){
@@ -1043,6 +1053,7 @@
 
   async function handleEditarTarea(e){
     e.preventDefault();
+    if(!confirm('¿Estás seguro de guardar estos cambios en la tarea?')) return;
     var fd = new FormData(e.target);
     try{
       var res = await sb.from('tareas').update({
@@ -1065,6 +1076,7 @@
   }
 
   async function restaurarTarea(id){
+    if(!confirm('¿Estás seguro de restaurar esta tarea de la papelera?')) return;
     try{
       var res = await sb.from('tareas').update({ eliminado_en: null, eliminado_por: null }).eq('id', id).select().single();
       if(res.error) throw res.error;
@@ -1090,6 +1102,7 @@
 
   async function handleCerrarTarea(e){
     e.preventDefault();
+    if(!confirm('¿Estás seguro de finalizar esta tarea?')) return;
     var fd = new FormData(e.target);
     var inputFoto = e.target.querySelector('[name="fotoDespues"]');
     var file = (inputFoto && inputFoto.files) ? inputFoto.files[0] : null;
@@ -1242,16 +1255,7 @@
     catch(err){ showToast('Error al borrar'); }
   }
 
-  async function toggleDisponible(){
-    var u = state.perfil;
-    var nuevo = !u.disponible;
-    try{
-      await sb.from('perfiles').update({disponible: nuevo}).eq('id', u.id);
-      u.disponible = nuevo;
-      showToast(nuevo ? 'Ahora apareces como disponible' : 'Ahora apareces como ocupado');
-    }catch(err){ showToast('Error: ' + err.message); }
-    render();
-  }
+  
 
   // --- ACCIONES DE ADMINISTRADOR ---
   async function cambiarRolUsuario(id, nuevoRol){
@@ -1269,6 +1273,7 @@
     var u = state.usuarios.find(function(x){return x.id===id;});
     if(!u) return;
     var nuevo = u.status === 'activo' ? 'inactivo' : 'activo';
+    if(!confirm('¿Estás seguro de ' + (nuevo === 'activo' ? 'activar' : 'desactivar') + ' a ' + u.nombre + '?')) return;
     try{
       await sb.from('perfiles').update({status: nuevo}).eq('id', id);
       u.status = nuevo; render();
@@ -1726,7 +1731,7 @@
     else if(tab === 'usuarios'){
       var mem = state.usuarios.filter(function(u){ return u.rol === 'secundario'; });
       htmlContent = '<div class="ios-list">' + (mem.length ? mem.map(function(u){
-        return '<div class="ios-row"><div class="ios-row-main"><div class="ios-row-title">'+u.nombre+'</div><div class="ios-row-sub">'+(u.disponible?'🟢 Disponible':'🔴 Ocupado')+'</div></div><div class="ios-switch '+(u.status==='activo'?'on':'')+'" data-toggle-usuario="'+u.id+'"></div></div>';
+        return '<div class="ios-row"><div class="ios-row-main"><div class="ios-row-title">'+u.nombre+'</div></div><div class="ios-switch '+(u.status==='activo'?'on':'')+'" data-toggle-usuario="'+u.id+'"></div></div>';
       }).join('') : '<div class="ios-row"><span class="empty">Nadie registrado todavía.</span></div>') + '</div>';
     }
     else if(tab === 'inventario'){ htmlContent = renderInventarioSection(true); }
@@ -1738,7 +1743,7 @@
     return '\
       <div class="top-header"><div><p class="eyebrow">Jefatura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll">\
-        <div class="row" style="margin-bottom:14px;"><button class="btn-ghost btn-sm" style="flex:1;" id="btn-activar-push">🔔 Notificaciones</button><button class="btn-ghost btn-sm" style="flex:1;" id="btn-tema">🌗 Tema</button></div>\
+        <div class="row" style="margin-bottom:14px;">' + botonNotificacionesHtml('btn-ghost btn-sm', 'flex:1;') + '<button class="btn-ghost btn-sm" style="flex:1;" id="btn-tema">🌗 Tema</button></div>\
         ' + htmlContent + '\
       </div>\
       <div class="ios-tabbar">\
@@ -1812,7 +1817,7 @@
     return '\
       <div class="top-header"><div><p class="eyebrow">Admin</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll">\
-        <div class="row" style="margin-bottom:14px;"><button class="btn-ghost btn-sm" style="flex:1;" id="btn-activar-push">🔔 Notificaciones</button><button class="btn-ghost btn-sm" style="flex:1;" id="btn-tema">🌗 Tema</button></div>\
+        <div class="row" style="margin-bottom:14px;">' + botonNotificacionesHtml('btn-ghost btn-sm', 'flex:1;') + '<button class="btn-ghost btn-sm" style="flex:1;" id="btn-tema">🌗 Tema</button></div>\
         ' + htmlContent + '\
       </div>\
       <div class="ios-tabbar">\
@@ -1873,7 +1878,7 @@
     if(tab === 'tareas'){ marcarVistasSiHaceFalta(tasks.filter(function(t){ return t.status === 'pendiente'; })); }
     var htmlContent = '';
     if(tab === 'tareas'){
-      htmlContent = badgeCard(u) + '<div style="margin:12px 0;"><button class="btn-ghost btn-full" data-toggle-disp>Cambiar a '+(u.disponible?'Ocupado':'Disponible')+'</button><button class="btn-ghost btn-full" id="btn-activar-push" style="margin-top:8px;">🔔 Activar notificaciones</button><button class="btn-ghost btn-full" id="btn-tema" style="margin-top:8px;">🌗 Cambiar tema</button></div>' + renderFilterBar() + '<div class="grid">' + (tasks.length ? conSeparadoresDeFecha(tasks, 'created_at', function(t){return taskCard(t,false);}) : '<div class="empty">Sin tareas asignadas.</div>') + '</div>';
+      htmlContent = badgeCard(u) + '<div style="margin:12px 0;">' + botonNotificacionesHtml('btn-ghost btn-full') + '<button class="btn-ghost btn-full" id="btn-tema" style="margin-top:8px;">🌗 Cambiar tema</button></div>' + renderFilterBar() + '<div class="grid">' + (tasks.length ? conSeparadoresDeFecha(tasks, 'created_at', function(t){return taskCard(t,false);}) : '<div class="empty">Sin tareas asignadas.</div>') + '</div>';
     } else if(tab === 'inventario'){ htmlContent = renderInventarioSection(false); }
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
     else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(false); }
@@ -2010,6 +2015,7 @@
 
     app.querySelectorAll('[data-action-complete]').forEach(function(n){ n.addEventListener('click', function(){ state.modalCierreTaskId = n.getAttribute('data-action-complete'); render(); }); });
     app.querySelectorAll('[data-action-reabrir]').forEach(function(n){ n.addEventListener('click', async function(){
+      if(!confirm('¿Estás seguro de reabrir esta tarea?')) return;
       await sb.from('tareas').update({status:'pendiente', notas_cierre:null}).eq('id', n.getAttribute('data-action-reabrir'));
       await cargarDatosGlobales(); render(); showToast("Tarea Reabierta");
     }); });
@@ -2125,7 +2131,7 @@
 
     var btnPush = document.getElementById('btn-activar-push'); if(btnPush) btnPush.addEventListener('click', habilitarNotificaciones);
     var btnTema = document.getElementById('btn-tema'); if(btnTema) btnTema.addEventListener('click', alternarTema);
-    var dispBtn = document.querySelector('[data-toggle-disp]'); if(dispBtn) dispBtn.addEventListener('click', toggleDisponible);
+  
 
     app.querySelectorAll('[data-lightbox]').forEach(function(img){ img.addEventListener('click', function(){ state.lightboxUrl = img.getAttribute('data-lightbox'); render(); }); });
     var lbOverlay = document.getElementById('lightbox-overlay'); if(lbOverlay) lbOverlay.addEventListener('click', function(){ state.lightboxUrl = null; render(); });
@@ -2133,7 +2139,17 @@
 
     // Admin
     app.querySelectorAll('[data-toggle-usuario]').forEach(function(n){ n.addEventListener('click', function(){ toggleStatusUsuario(n.getAttribute('data-toggle-usuario')); }); });
-    app.querySelectorAll('[data-cambiar-rol]').forEach(function(n){ n.addEventListener('change', function(){ cambiarRolUsuario(n.getAttribute('data-cambiar-rol'), n.value); }); });
+    app.querySelectorAll('[data-cambiar-rol]').forEach(function(n){
+      n.addEventListener('change', function(){
+        var idUsuario = n.getAttribute('data-cambiar-rol');
+        var usuarioActual = state.usuarios.find(function(x){ return x.id === idUsuario; });
+        if(!confirm('¿Estás seguro de cambiar el rol a "' + nombreRol(n.value) + '"?')){
+          if(usuarioActual){ n.value = usuarioActual.rol; }
+          return;
+        }
+        cambiarRolUsuario(idUsuario, n.value);
+      });
+    });
     app.querySelectorAll('[data-eliminar-usuario]').forEach(function(n){ n.addEventListener('click', function(){ eliminarUsuarioDefinitivo(n.getAttribute('data-eliminar-usuario'), n.getAttribute('data-nombre-usuario')); }); });
   }
 
