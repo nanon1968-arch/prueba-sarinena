@@ -1619,7 +1619,7 @@
         ' + m + htmlDocumentos + htmlComments + '\
         ' + (soloLectura ? '' : ('\
         <div class="task-actions">\
-          ' + (!done ? '<button class="btn-primary btn-sm" data-action-complete="'+t.id+'">✔️ Finalizar Parte</button>' : '<button class="btn-ghost btn-sm" data-action-reabrir="'+t.id+'">🔄 Reabrir</button>') + '\
+          ' + ((state.perfil && (t.assigned_to === state.perfil.id || isGestor)) ? (!done ? '<button class="btn-primary btn-sm" data-action-complete="'+t.id+'">✔️ Finalizar Parte</button>' : '<button class="btn-ghost btn-sm" data-action-reabrir="'+t.id+'">🔄 Reabrir</button>') : '') + '\
           ' + (isGestor ? '<button class="btn-ghost btn-sm" data-task-editar="'+t.id+'">✏️ Editar</button><button class="btn-danger-ghost btn-sm" data-task-remove="'+t.id+'">Eliminar</button>' : '') + '\
         </div>')) + '\
       </div>';
