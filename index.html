@@ -1196,15 +1196,29 @@
     }catch(err){ showToast('Error'); }
   }
 
+  function totalHorasRecuperablesActual(){
+    return state.apuntesBloc.reduce(function(acc, a){
+      return acc + (a.horas_recuperables !== null && a.horas_recuperables !== undefined ? parseFloat(a.horas_recuperables) : 0);
+    }, 0);
+  }
+
   async function handleAddApunte(e){
     e.preventDefault();
     var input = e.target.querySelector('input[name="texto"]');
     var esFestivo = e.target.querySelector('input[name="esFestivo"]').checked;
+    var gastaHoras = e.target.querySelector('input[name="gastaHoras"]').checked;
     var horaInicio = e.target.querySelector('input[name="horaInicio"]').value;
     var horaFin = e.target.querySelector('input[name="horaFin"]').value;
     var fechaFestivo = e.target.querySelector('input[name="fechaFestivo"]').value;
+    var fechaGasto = e.target.querySelector('input[name="fechaGasto"]').value;
+    var horasAGastarStr = e.target.querySelector('input[name="horasAGastar"]').value;
     var txt = input.value.trim();
     if(!txt) return;
+
+    if(esFestivo && gastaHoras){
+      showToast('⚠️ Elige solo una opción: sumar horas (festivo) o gastar horas');
+      return;
+    }
 
     if(esFestivo && (!horaInicio || !horaFin || !fechaFestivo)){
       showToast('⚠️ Indica fecha, hora de inicio y de fin para un apunte en festivo');
@@ -1223,6 +1237,21 @@
       horasRecuperables = Math.round((diffMin/60) * 100) / 100;
     }
 
+    if(gastaHoras){
+      var horasAGastar = parseFloat(horasAGastarStr);
+      if(!fechaGasto || !horasAGastar || horasAGastar <= 0){
+        showToast('⚠️ Indica la fecha y cuántas horas vas a gastar');
+        return;
+      }
+      var saldoActual = totalHorasRecuperablesActual();
+      if(horasAGastar > saldoActual){
+        if(!confirm('Solo tienes ' + saldoActual + ' h recuperables y vas a gastar ' + horasAGastar + ' h. ¿Estás seguro? El total quedará en negativo.')) return;
+      } else {
+        if(!confirm('¿Estás seguro de gastar ' + horasAGastar + ' h recuperables el ' + fechaGasto + '?')) return;
+      }
+      horasRecuperables = -Math.round(horasAGastar * 100) / 100;
+    }
+
     try{
       var datosApunte = {
         user_id: state.perfil.id, texto: txt,
@@ -1235,17 +1264,30 @@
         // Guardamos el apunte con la fecha real del festivo, no la de hoy
         datosApunte.created_at = new Date(fechaFestivo + 'T' + horaInicio + ':00').toISOString();
       }
+      if(gastaHoras && fechaGasto){
+        // Al mediodía para evitar problemas de zona horaria con el día
+        datosApunte.created_at = new Date(fechaGasto + 'T12:00:00').toISOString();
+      }
       var res = await sb.from('notas_bloc').insert(datosApunte).select().single();
       if(res.error) throw res.error;
       state.apuntesBloc.push(res.data);
       state.apuntesBloc.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
       input.value = '';
       e.target.querySelector('input[name="esFestivo"]').checked = false;
+      e.target.querySelector('input[name="gastaHoras"]').checked = false;
       e.target.querySelector('input[name="horaInicio"]').value = '';
       e.target.querySelector('input[name="horaFin"]').value = '';
+      e.target.querySelector('input[name="horasAGastar"]').value = '';
       e.target.querySelector('input[name="fechaFestivo"]').value = new Date().toISOString().slice(0,10);
+      e.target.querySelector('input[name="fechaGasto"]').value = new Date().toISOString().slice(0,10);
       render();
-      showToast(esFestivo ? ('🎉 Apunte guardado (' + fechaFestivo + ') — ' + horasRecuperables + ' h recuperables') : '📝 Apunte guardado');
+      if(esFestivo){
+        showToast('🎉 Apunte guardado (' + fechaFestivo + ') — +' + horasRecuperables + ' h recuperables');
+      } else if(gastaHoras){
+        showToast('💳 Gastadas ' + Math.abs(horasRecuperables) + ' h — te quedan ' + Math.round(totalHorasRecuperablesActual() * 100) / 100 + ' h');
+      } else {
+        showToast('📝 Apunte guardado');
+      }
     }catch(err){ showToast('Error al guardar: ' + err.message); }
   }
 
@@ -1419,8 +1461,15 @@
   }
 
   function renderCalendarioHorasRecuperables(){
-    var apuntesFestivos = state.apuntesBloc.filter(function(a){ return a.es_festivo && a.horas_recuperables; });
-    var totalHoras = apuntesFestivos.reduce(function(acc, a){ return acc + parseFloat(a.horas_recuperables); }, 0);
+    // Movimientos = horas ganadas (positivas, festivos) y horas gastadas (negativas)
+    var apuntesFestivos = state.apuntesBloc.filter(function(a){
+      return a.horas_recuperables !== null && a.horas_recuperables !== undefined && parseFloat(a.horas_recuperables) !== 0;
+    });
+    var ganadas = apuntesFestivos.reduce(function(acc, a){ var h = parseFloat(a.horas_recuperables); return h > 0 ? acc + h : acc; }, 0);
+    var gastadas = apuntesFestivos.reduce(function(acc, a){ var h = parseFloat(a.horas_recuperables); return h < 0 ? acc + Math.abs(h) : acc; }, 0);
+    var totalHoras = Math.round((ganadas - gastadas) * 100) / 100;
+    ganadas = Math.round(ganadas * 100) / 100;
+    gastadas = Math.round(gastadas * 100) / 100;
 
     if(!state.calendarioMes){
       var ahora = new Date();
@@ -1444,10 +1493,15 @@
     for(var i=0; i<primerDiaSemana; i++){ celdas += '<div></div>'; }
     for(var d=1; d<=diasEnMes; d++){
       var horasDia = horasPorDia[d];
+      var horasDiaRedondeado = horasDia ? Math.round(horasDia * 100) / 100 : 0;
+      var esGasto = horasDia && horasDia < 0;
+      var estiloDia = horasDia
+        ? (esGasto ? 'background:rgba(255,69,58,0.15);color:var(--red);font-weight:700;' : 'background:var(--primary-light);color:var(--primary);font-weight:700;')
+        : 'color:var(--ink-soft);';
       celdas += '\
-        <div style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;font-size:11px;' + (horasDia ? 'background:var(--primary-light);color:var(--primary);font-weight:700;' : 'color:var(--ink-soft);') + '">\
+        <div style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;font-size:11px;' + estiloDia + '">\
           <div>' + d + '</div>\
-          ' + (horasDia ? '<div style="font-size:9px;">' + horasDia + 'h</div>' : '') + '\
+          ' + (horasDia ? '<div style="font-size:9px;">' + (horasDiaRedondeado > 0 ? '+' : '') + horasDiaRedondeado + 'h</div>' : '') + '\
         </div>';
     }
     var diasSemana = ['L','M','X','J','V','S','D'].map(function(d){ return '<div style="text-align:center;font-size:10px;color:var(--ink-soft);">'+d+'</div>'; }).join('');
@@ -1455,7 +1509,11 @@
     return '\
       <div class="card" style="margin-top:14px;">\
         <div class="row" style="justify-content:space-between;margin-bottom:8px;">\
-          <div><h3 style="font-size:16px;">🎉 Horas recuperables</h3><p class="hint">Total acumulado: <b>' + totalHoras + ' h</b></p></div>\
+          <div>\
+            <h3 style="font-size:16px;">🎉 Horas recuperables</h3>\
+            <p class="hint">Saldo disponible: <b style="color:' + (totalHoras < 0 ? 'var(--red)' : 'var(--green)') + ';">' + totalHoras + ' h</b></p>\
+            <p class="hint">➕ Ganadas: ' + ganadas + ' h · ➖ Gastadas: ' + gastadas + ' h</p>\
+          </div>\
         </div>\
         <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px;">\
           <button class="btn-ghost btn-sm" id="btn-mes-anterior">◀</button>\
@@ -1463,9 +1521,13 @@
           <button class="btn-ghost btn-sm" id="btn-mes-siguiente">▶</button>\
         </div>\
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">' + diasSemana + celdas + '</div>\
-        ' + (apuntesFestivos.length ? '<div class="stack" style="gap:6px;margin-top:12px;">' + apuntesFestivos.slice(0,10).map(function(a){
-          return '<div class="hint">📅 ' + formatFecha(a.created_at).split(' ')[0] + ' · ' + a.hora_inicio.slice(0,5) + '–' + a.hora_fin.slice(0,5) + ' · <b>' + a.horas_recuperables + ' h</b></div>';
-        }).join('') + '</div>' : '<p class="empty">Todavía no hay horas en festivo registradas.</p>') + '\
+        ' + (apuntesFestivos.length ? '<div class="stack" style="gap:6px;margin-top:12px;">' + apuntesFestivos.slice(0,12).map(function(a){
+          var h = parseFloat(a.horas_recuperables);
+          var esGasto = h < 0;
+          var fechaCorta = formatFecha(a.created_at).split(' ')[0];
+          var detalleHorario = (!esGasto && a.hora_inicio && a.hora_fin) ? (' · ' + a.hora_inicio.slice(0,5) + '–' + a.hora_fin.slice(0,5)) : '';
+          return '<div class="hint">' + (esGasto ? '💳' : '🎉') + ' ' + fechaCorta + detalleHorario + ' · <b style="color:' + (esGasto ? 'var(--red)' : 'var(--green)') + ';">' + (h > 0 ? '+' : '') + (Math.round(h*100)/100) + ' h</b></div>';
+        }).join('') + '</div>' : '<p class="empty">Todavía no hay horas recuperables registradas.</p>') + '\
       </div>';
   }
 
@@ -1479,7 +1541,7 @@
     var lista = apuntesFiltrados.map(function(a){
       return '\
         <div class="comment-item" style="position:relative; padding-right:36px;">\
-          <div class="comment-author">' + formatFecha(a.created_at) + (a.es_festivo ? ' · 🎉 festivo (' + a.hora_inicio.slice(0,5) + '–' + a.hora_fin.slice(0,5) + ', ' + a.horas_recuperables + 'h)' : '') + '</div>\
+          <div class="comment-author">' + formatFecha(a.created_at) + (a.es_festivo && a.hora_inicio && a.hora_fin ? ' · 🎉 festivo (' + a.hora_inicio.slice(0,5) + '–' + a.hora_fin.slice(0,5) + ', +' + a.horas_recuperables + 'h)' : '') + (!a.es_festivo && a.horas_recuperables && parseFloat(a.horas_recuperables) < 0 ? ' · 💳 gastadas ' + Math.abs(parseFloat(a.horas_recuperables)) + 'h' : '') + '</div>\
           <div>' + a.texto.replace(/\n/g, '<br>') + '</div>\
           <button data-apunte-borrar="'+a.id+'" style="position:absolute; top:8px; right:8px; background:none; border:none; color:var(--ink-soft); font-size:14px; padding:2px;">🗑</button>\
         </div>';
@@ -1489,7 +1551,7 @@
         <div><h3 style="font-size:17px;">📝 Mi Bloc</h3><p class="hint" style="margin-top:4px;">Cada apunte se guarda con su fecha y hora, sin borrarse.</p></div>\
         <form id="form-add-apunte" class="stack">\
           <div class="row"><input name="texto" placeholder="Ej: 40 sillas cargadas" required style="flex:1;"><button type="submit" class="btn-primary">Añadir</button></div>\
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" name="esFestivo" id="check-es-festivo" style="width:auto;"> 🎉 Es un apunte en día festivo (horas recuperables)</label>\
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" name="esFestivo" id="check-es-festivo" style="width:auto;"> 🎉 Es un apunte en día festivo (sumar horas recuperables)</label>\
           <div class="stack" id="campos-horario-festivo" style="display:none;">\
             <div><label>Fecha del festivo</label><input type="date" name="fechaFestivo" value="' + new Date().toISOString().slice(0,10) + '"></div>\
             <div class="row">\
@@ -1497,6 +1559,11 @@
               <div style="flex:1;"><label>Hora fin</label><input type="time" name="horaFin"></div>\
             </div>\
             <p class="hint">Si se te olvidó apuntarlo el mismo día, cambia la fecha por la del festivo real.</p>\
+          </div>\
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" name="gastaHoras" id="check-gasta-horas" style="width:auto;"> 💳 Gastar horas recuperables (restar del total)</label>\
+          <div class="stack" id="campos-gasto-horas" style="display:none;">\
+            <div><label>Fecha en que las gastas</label><input type="date" name="fechaGasto" value="' + new Date().toISOString().slice(0,10) + '"></div>\
+            <div><label>Horas a gastar</label><input type="number" name="horasAGastar" step="0.25" min="0.25" placeholder="Ej: 4"></div>\
           </div>\
         </form>\
         <div class="row">\
@@ -2053,13 +2120,29 @@
 
     var formApunte = document.getElementById('form-add-apunte'); if(formApunte) formApunte.addEventListener('submit', handleAddApunte);
     var checkFestivo = document.getElementById('check-es-festivo');
+    var checkGasta = document.getElementById('check-gasta-horas');
+    function actualizarCamposHoras(){
+      var camposFestivo = document.getElementById('campos-horario-festivo');
+      var camposGasto = document.getElementById('campos-gasto-horas');
+      if(camposFestivo){
+        camposFestivo.style.display = (checkFestivo && checkFestivo.checked) ? 'flex' : 'none';
+        camposFestivo.querySelectorAll('input').forEach(function(inp){ inp.required = !!(checkFestivo && checkFestivo.checked); });
+      }
+      if(camposGasto){
+        camposGasto.style.display = (checkGasta && checkGasta.checked) ? 'flex' : 'none';
+        camposGasto.querySelectorAll('input').forEach(function(inp){ inp.required = !!(checkGasta && checkGasta.checked); });
+      }
+    }
     if(checkFestivo){
       checkFestivo.addEventListener('change', function(){
-        var campos = document.getElementById('campos-horario-festivo');
-        if(campos){
-          campos.style.display = checkFestivo.checked ? 'flex' : 'none';
-          campos.querySelectorAll('input').forEach(function(inp){ inp.required = checkFestivo.checked; });
-        }
+        if(checkFestivo.checked && checkGasta){ checkGasta.checked = false; }
+        actualizarCamposHoras();
+      });
+    }
+    if(checkGasta){
+      checkGasta.addEventListener('change', function(){
+        if(checkGasta.checked && checkFestivo){ checkFestivo.checked = false; }
+        actualizarCamposHoras();
       });
     }
     var btnMesAnterior = document.getElementById('btn-mes-anterior');
@@ -2166,6 +2249,8 @@
     if(campoTituloPropia && campoTituloPropia.value.trim() !== '') return true;
     var checkFestivoGuard = document.querySelector('#check-es-festivo');
     if(checkFestivoGuard && checkFestivoGuard.checked) return true;
+    var checkGastaGuard = document.querySelector('#check-gasta-horas');
+    if(checkGastaGuard && checkGastaGuard.checked) return true;
     if(state.modalCierreTaskId) return true;
     if(state.modalEditarTaskId) return true;
     if(state.mostrarCuenta) return true;
