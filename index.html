@@ -6,7 +6,7 @@
 <meta http-equiv="expires" content="0">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#007AFF">
 <title>Brigada de Sariñena</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -108,9 +108,28 @@
 
   .toast{position:fixed;bottom:calc(var(--tabbar-h) + 16px);left:50%;transform:translateX(-50%);background:var(--surface-alt);color:#fff;padding:12px 18px;border-radius:100px;font-size:13.5px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:150;max-width:90%;text-align:center;border:1px solid var(--border);}
 
-  .loading-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--ink-soft);gap:14px;}
+  .loading-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--ink-soft);gap:0;background:var(--bg);}
   .loading-screen img{width:88px;height:88px;border-radius:22px;}
   .loading-screen .loading-text{font-family:var(--font-mono);font-size:12.5px;}
+
+  /* Splash profesional */
+  @keyframes splashFadeIn{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes splashPulse{0%,100%{opacity:0.4;}50%{opacity:1;}}
+  @keyframes splashDots{0%{content:''}33%{content:'.'}66%{content:'..'}100%{content:'...'}}
+  .splash-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(160deg,#007AFF 0%,#0051D5 100%);gap:0;}
+  .splash-titulo{color:#fff !important;}
+  .splash-sub{color:rgba(255,255,255,0.75) !important;}
+  .splash-loading{color:rgba(255,255,255,0.6) !important;}
+  .splash-bar-wrap{background:rgba(255,255,255,0.25) !important;}
+  .splash-bar{background:#fff !important;}
+  .splash-escudo{width:110px;height:auto;animation:splashFadeIn 0.7s ease both;}
+  .splash-titulo{font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--ink);margin-top:22px;animation:splashFadeIn 0.7s 0.2s ease both;letter-spacing:-0.01em;}
+  .splash-sub{font-size:13px;color:var(--ink-soft);margin-top:6px;animation:splashFadeIn 0.7s 0.35s ease both;}
+  .splash-dots{display:inline-block;width:28px;text-align:left;}
+  .splash-loading{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);margin-top:32px;animation:splashFadeIn 0.7s 0.5s ease both,splashPulse 1.4s 0.5s ease infinite;}
+  .splash-bar-wrap{width:140px;height:3px;background:var(--border);border-radius:2px;margin-top:10px;overflow:hidden;animation:splashFadeIn 0.7s 0.55s ease both;}
+  .splash-bar{height:100%;background:var(--primary);border-radius:2px;animation:splashProgress 1.8s 0.55s ease-in-out both;}
+  @keyframes splashProgress{from{width:0;}to{width:100%;}}
   .app-footer{text-align:center;font-size:11px;color:var(--ink-soft);margin-top:24px;font-family:var(--font-mono);}
 
   /* Barra de pestañas inferior, estilo iOS */
@@ -156,14 +175,29 @@
   .inv-name{font-weight:600;font-size:15px;}
   .inv-controls{display:flex;align-items:center;gap:10px;}
   .inv-btn{background:var(--surface);border:1px solid var(--border);color:var(--ink);width:30px;height:30px;border-radius:8px;font-size:16px;display:flex;align-items:center;justify-content:center;}
+
+  /* Estado visual de tarea */
+  .estado-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:100px;letter-spacing:0.01em;}
+  .estado-pendiente{background:rgba(255,159,10,0.15);color:var(--amber);border:1px solid rgba(255,159,10,0.3);}
+  .estado-hecho{background:rgba(48,209,88,0.13);color:#1a9e3f;border:1px solid rgba(48,209,88,0.3);}
+  body.tema-claro .estado-hecho{color:#1a8e36;}
+  .estado-urgente{background:rgba(255,69,58,0.13);color:var(--red);border:1px solid rgba(255,69,58,0.35);}
+  .estado-dot-p{width:7px;height:7px;border-radius:50%;background:var(--amber);display:inline-block;}
+  .estado-dot-h{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;}
+  .estado-dot-u{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block;}
+
+  /* Login mejorado */
+  .login-escudo{width:80px;height:auto;margin-bottom:4px;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.13));}
+  .login-institucion{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-soft);font-family:var(--font-mono);margin-top:2px;}
 </style>
 </head>
-<body>
+<body class="tema-claro">
 <div id="app"></div>
 
 <script>
 (function(){
   var BRIGADA_NOMBRE = 'Brigada de Sariñena';
+  var ESCUDO_URI = 'escudo-sarinena.png';
 
   var ICONOS_SVG = {
     propias: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
@@ -178,7 +212,7 @@
   };
   function iconoTab(nombre){ return ICONOS_SVG[nombre] || ''; }
   var LOCALIDADES = ['Sariñena', 'La Cartuja de Monegros', 'San Juan del Flumen', 'Pallaruelo', 'Lastanosa', 'Lamasadera'];
-  var APP_VERSION = '2.1 · 15 oct 2026';
+  var APP_VERSION = '3.1 · 17 oct 2026';
   var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_WIsoROQk7m6rQVcdgB7wRw_1nOFTlfD';
   var FOTOS_BUCKET = 'tareas-fotos';
@@ -223,8 +257,10 @@
   };
 
   function aplicarTemaGuardado(){
+    // Por defecto modo claro; solo cambiar si el usuario eligió oscuro explícitamente
     var guardado = localStorage.getItem('brigada_tema');
-    if(guardado === 'claro'){ document.body.classList.add('tema-claro'); }
+    if(guardado === 'oscuro'){ document.body.classList.remove('tema-claro'); }
+    // si guardado === 'claro' o null → mantener tema-claro del body
   }
   function alternarTema(){
     document.body.classList.toggle('tema-claro');
@@ -339,21 +375,48 @@
       var jsPDFlib = window.jspdf.jsPDF;
       var doc = new jsPDFlib();
       var pageH = doc.internal.pageSize.getHeight();
-      var y = 18;
+      var pageW = doc.internal.pageSize.getWidth();
+      var y = 10;
 
-      doc.setFontSize(17);
-      doc.text(BRIGADA_NOMBRE + ' — Informe de tareas', 10, y);
-      y += 6;
+      // ── MEMBRETE INSTITUCIONAL ──
+      // Banda azul superior
+      doc.setFillColor(0, 122, 255);
+      doc.rect(0, 0, pageW, 28, 'F');
+
+      // Escudo (cargado como imagen)
+      try{
+        var escudoImg = new Image();
+        escudoImg.src = ESCUDO_URI;
+        await new Promise(function(res){ escudoImg.onload = res; escudoImg.onerror = res; });
+        var canvas = document.createElement('canvas');
+        canvas.width = escudoImg.naturalWidth || 100;
+        canvas.height = escudoImg.naturalHeight || 100;
+        var ctx2d = canvas.getContext('2d');
+        ctx2d.drawImage(escudoImg, 0, 0);
+        var escudoData = canvas.toDataURL('image/png');
+        doc.addImage(escudoData, 'PNG', 6, 2, 24, 24);
+      }catch(e2){}
+
+      // Título en la banda
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.text('Ayuntamiento de Sariñena', 36, 12);
       doc.setFontSize(9);
-      doc.setTextColor(120);
-      doc.text('Generado el ' + new Date().toLocaleString('es-ES'), 10, y);
+      doc.setFont(undefined, 'normal');
+      doc.text(BRIGADA_NOMBRE + ' — Informe de Tareas', 36, 20);
+
+      // Fecha a la derecha
+      doc.setFontSize(8);
+      doc.text('Generado: ' + new Date().toLocaleString('es-ES'), pageW - 8, 24, { align: 'right' });
+
       doc.setTextColor(0);
-      y += 10;
+      y = 40;
 
       var tareasAExportar = filtrarTareas(state.tareas);
       for(var i=0; i<tareasAExportar.length; i++){
         var t = tareasAExportar[i];
-        if(y > pageH - 70){ doc.addPage(); y = 18; }
+        if(y > pageH - 70){ doc.addPage(); y = 20; }
 
         doc.setFontSize(13);
         doc.setFont(undefined, 'bold');
@@ -380,7 +443,7 @@
         var fotoAntes = t.foto_url ? await urlAdataUrl(t.foto_url) : null;
         var fotoDespues = t.foto_despues_url ? await urlAdataUrl(t.foto_despues_url) : null;
         if(fotoAntes || fotoDespues){
-          if(y > pageH - 55){ doc.addPage(); y = 18; }
+          if(y > pageH - 55){ doc.addPage(); y = 20; }
           var xImg = 10;
           if(fotoAntes){
             doc.setFontSize(8); doc.text('Foto inicial', xImg, y);
@@ -399,7 +462,19 @@
         y += 8;
       }
 
-      doc.save('Informe_' + BRIGADA_NOMBRE.replace(/\s+/g,'_') + '.pdf');
+      // Pie de página en cada hoja
+      var totalPags = doc.getNumberOfPages();
+      for(var pg = 1; pg <= totalPags; pg++){
+        doc.setPage(pg);
+        doc.setFontSize(8);
+        doc.setTextColor(160);
+        doc.text('Ayuntamiento de Sariñena · Brigada Municipal · Página ' + pg + ' de ' + totalPags, pageW/2, pageH - 8, { align: 'center' });
+        doc.setDrawColor(220);
+        doc.line(10, pageH - 12, pageW - 10, pageH - 12);
+      }
+      doc.setTextColor(0);
+
+      doc.save('Informe_' + BRIGADA_NOMBRE.replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
       showToast('✅ PDF generado');
     }catch(err){
       showToast('⚠️ Error generando PDF: ' + err.message);
@@ -555,21 +630,26 @@
   }
 
   async function init(){
-    try{
-      var s = await sb.auth.getSession();
-      var session = s.data && s.data.session;
-      if(session){
-        var perfil = await cargarPerfil(session.user.id);
-        if(perfil){
-          await cargarSesionCompleta(perfil);
-          render();
-          return;
+    // Mostrar splash mínimo 1.5s para que se vea bien
+    render(); // muestra splash inmediatamente
+    var tiempoMinimo = new Promise(function(res){ setTimeout(res, 1500); });
+    var cargado = (async function(){
+      try{
+        var s = await sb.auth.getSession();
+        var session = s.data && s.data.session;
+        if(session){
+          var perfil = await cargarPerfil(session.user.id);
+          if(perfil){
+            await cargarSesionCompleta(perfil);
+            return;
+          }
         }
-      }
-    }catch(err){}
-    var resP = await sb.from('perfiles').select('id').in('rol', ['principal','administrador']).limit(1);
-    state.authTab = (resP.data && resP.data.length > 0) ? 'login' : 'register';
-    state.screen = 'auth';
+      }catch(err){}
+      var resP = await sb.from('perfiles').select('id').in('rol', ['principal','administrador']).limit(1);
+      state.authTab = (resP.data && resP.data.length > 0) ? 'login' : 'register';
+      state.screen = 'auth';
+    })();
+    await Promise.all([tiempoMinimo, cargado]);
     render();
   }
 
@@ -1358,10 +1438,14 @@
       </form>' : '';
     return '\
       <div class="screen-scroll">\
-        <div class="stack" style="margin-top:40px; text-align:center;">\
-          <h1 style="font-size:26px;">' + BRIGADA_NOMBRE + '</h1>\
-          <p class="hint">Ayuntamiento de Sariñena</p>\
-          <div class="ios-list" style="display:flex;margin-top:10px;">\
+        <div class="stack" style="margin-top:36px; text-align:center;">\
+          <img class="login-escudo" src="' + ESCUDO_URI + '" alt="Escudo Ayuntamiento de Sariñena">\
+          <h1 style="font-size:24px;margin-top:10px;">' + BRIGADA_NOMBRE + '</h1>\
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px;">\
+            <div class="login-institucion" style="margin:0;">Ayuntamiento de Sariñena</div>\
+            <div style="background:var(--primary);color:#fff;font-family:var(--font-mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;">v' + APP_VERSION + '</div>\
+          </div>\
+          <div class="ios-list" style="display:flex;margin-top:12px;">\
             <button class="ios-tab ' + (isL?'active':'') + '" style="flex-direction:row;height:44px;" data-authtab="login">Iniciar sesión</button>\
             <button class="ios-tab ' + (!isL?'active':'') + '" style="flex-direction:row;height:44px;" data-authtab="register">Registrarme</button>\
           </div>\
@@ -1674,8 +1758,8 @@
         <div class="task-top">\
           <div class="task-title">' + t.titulo + '</div>\
           <div style="display:flex; gap:4px; flex-direction:column; align-items:flex-end;">\
-            <span class="tag ' + (done ? 'tag-hecho' : 'tag-pendiente') + '">' + (done ? 'Hecho' : 'Pendiente') + '</span>\
-            ' + (t.urgencia ? '<span class="tag tag-urgente">🚨 Urgente</span>' : '') + '\
+            ' + (done ? '<span class="estado-badge estado-hecho"><span class="estado-dot-h"></span>Completada</span>' : '<span class="estado-badge estado-pendiente"><span class="estado-dot-p"></span>Pendiente</span>') + '\
+            ' + (t.urgencia && !done ? '<span class="estado-badge estado-urgente" style="margin-top:4px;"><span class="estado-dot-u"></span>Urgente</span>' : '') + '\
           </div>\
         </div>\
         ' + (companeros.length ? '<div class="hint" style="margin-top:6px;">👥 En grupo con: ' + companeros.map(function(c){ return nombreDe(c.assigned_to); }).join(', ') + '</div>' : '') + '\
@@ -1972,7 +2056,7 @@
 
   function render(){
     var app = document.getElementById('app');
-    var html = state.screen === 'loading' ? '<div class="loading-screen"><img src="icon-192.png" alt="Logo"><div class="loading-text">Cargando ' + BRIGADA_NOMBRE + '…</div></div>'
+    var html = state.screen === 'loading' ? '<div class="splash-screen"><img class="splash-escudo" src="'+ESCUDO_URI+'" alt="Escudo Sariñena"><div class="splash-titulo">' + BRIGADA_NOMBRE + '</div><div class="splash-sub">Ayuntamiento de Sariñena</div><div class="splash-loading">Cargando…</div><div class="splash-bar-wrap"><div class="splash-bar"></div></div></div>'
       : state.screen === 'auth' ? screenAuth()
       : state.screen === 'nuevaContrasena' ? screenNuevaContrasena()
       : state.screen === 'adminHome' ? screenAdminHome()
