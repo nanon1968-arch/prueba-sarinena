@@ -213,7 +213,7 @@
   };
   function iconoTab(nombre){ return ICONOS_SVG[nombre] || ''; }
   var LOCALIDADES = ['Sariñena', 'La Cartuja de Monegros', 'San Juan del Flumen', 'Pallaruelo', 'Lastanosa', 'Lamasadera'];
-  var APP_VERSION = '3.2 · 17 oct 2026';
+  var APP_VERSION = '3.3 · 17 oct 2026';
   var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_WIsoROQk7m6rQVcdgB7wRw_1nOFTlfD';
   var FOTOS_BUCKET = 'tareas-fotos';
@@ -2083,16 +2083,37 @@
       doc.text('· Total tareas: ' + tareas.filter(function(t){return !t.eliminado_en;}).length + '   Pendientes: ' + pendientes + '   Completadas: ' + hechas + '   Urgentes: ' + urgentes, 14, y); y+=6;
       doc.text('· Total usuarios: ' + perfiles.length + '   Entradas en auditoría: ' + auditoria.length, 14, y); y+=14;
 
-      // Tabla tareas (resumen)
+      // Tabla tareas con fotos de cierre
       doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.text('Listado de tareas', 10, y); y+=8;
-      tareas.filter(function(t){return !t.eliminado_en;}).forEach(function(t){
-        if(y > pageH-35){ doc.addPage(); y=34; }
+      var tareasParaPDF = tareas.filter(function(t){return !t.eliminado_en;});
+      for(var ti=0; ti<tareasParaPDF.length; ti++){
+        var t = tareasParaPDF[ti];
+        var necesitaFoto = t.status === 'hecho' && t.foto_despues_url;
+        var espacioNecesario = necesitaFoto ? 65 : 22;
+        if(y > pageH - espacioNecesario){ doc.addPage(); y=34; }
         doc.setFontSize(9); doc.setFont(undefined,'bold');
         doc.text((t.status==='hecho'?'[OK] ':'[PEND] ') + (t.titulo||'').slice(0,65), 10, y); y+=5;
         doc.setFont(undefined,'normal'); doc.setFontSize(8);
         doc.text('Asignado: '+nombreDe(t.assigned_to)+'  |  Categoría: '+(t.categoria||'General')+'  |  Creada: '+formatFecha(t.created_at)+(t.cerrado_en?'  |  Cerrada: '+formatFecha(t.cerrado_en):''), 14, y); y+=5;
-        doc.setDrawColor(230); doc.line(10, y, pageW-10, y); y+=3;
-      });
+        if(t.notas_cierre){
+          var notasPDF = doc.splitTextToSize('Parte de cierre: ' + t.notas_cierre, pageW-24);
+          doc.text(notasPDF, 14, y); y += notasPDF.length * 4;
+        }
+        if(necesitaFoto){
+          try{
+            var fotoCierreData = await urlAdataUrl(t.foto_despues_url);
+            if(fotoCierreData){
+              if(y > pageH-60){ doc.addPage(); y=34; }
+              doc.setFontSize(7); doc.setTextColor(100);
+              doc.text('Foto de resultado:', 14, y); y+=2;
+              doc.setTextColor(0);
+              doc.addImage(fotoCierreData, 'JPEG', 14, y, 70, 46);
+              y += 50;
+            }
+          }catch(ef){}
+        }
+        doc.setDrawColor(230); doc.line(10, y, pageW-10, y); y+=4;
+      }
 
       // Log auditoría
       if(y > pageH-50){ doc.addPage(); y=34; }

@@ -2,7 +2,7 @@
 // VERSIÓN AUTOMÁTICA: usa timestamp de build para forzar actualización en iPhone/Safari
 // Los datos (tareas, usuarios, fotos) siempre se piden en vivo a Supabase.
 
-var CACHE_NAME = 'brigada-sarinena-' + '2026101732000000';
+var CACHE_NAME = 'brigada-sarinena-' + '2026101733000000';
 var ARCHIVOS_CACHE = [
   './',
   './index.html',
