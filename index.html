@@ -208,11 +208,12 @@
     stats: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
     stock: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
     bloc: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
-    usuarios: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94Z"/></svg>'
+    usuarios: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94Z"/></svg>',
+    auditoria: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><polyline points="9 12 11 14 15 10"/></svg>'
   };
   function iconoTab(nombre){ return ICONOS_SVG[nombre] || ''; }
   var LOCALIDADES = ['Sariñena', 'La Cartuja de Monegros', 'San Juan del Flumen', 'Pallaruelo', 'Lastanosa', 'Lamasadera'];
-  var APP_VERSION = '3.1 · 17 oct 2026';
+  var APP_VERSION = '3.2 · 17 oct 2026';
   var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_WIsoROQk7m6rQVcdgB7wRw_1nOFTlfD';
   var FOTOS_BUCKET = 'tareas-fotos';
@@ -247,6 +248,7 @@
     mostrarTutorial: false,
     tutorialPaso: 0,
     filtroTareas: 'pendiente',
+    logAuditoria: [],
     filtroFecha: 'todas',
     filtroPersona: '',
     busquedaTareas: '',
@@ -627,6 +629,7 @@
     suscribirCambiosTareas();
     setTimeout(function(){ mostrarResumenNovedades(perfil); }, 900);
     comprobarTutorial(perfil);
+    registrarAuditoria('login', 'Inicio de sesión de ' + perfil.nombre + ' (' + nombreRol(perfil.rol) + ')', perfil.id);
   }
 
   async function init(){
@@ -916,6 +919,7 @@
       if(res.error) throw res.error;
       res.data.forEach(function(fila){ state.tareas.unshift(fila); });
       state.tempGps = '';
+      registrarAuditoria('tarea_creada', 'Tarea "' + titulo + '" asignada a ' + idsSeleccionados.length + ' operario(s)', res.data[0] ? res.data[0].id : null);
       showToast(idsSeleccionados.length > 1 ? ('🚨 Orden enviada a ' + idsSeleccionados.length + ' operarios') : '🚨 Orden generada');
     }catch(err){
       state.error = err.message;
@@ -1150,6 +1154,7 @@
       var idx = state.tareas.findIndex(function(t){ return t.id === state.modalEditarTaskId; });
       if(idx !== -1) state.tareas[idx] = res.data;
       await sb.from('historial_cambios').insert({ tarea_id: res.data.id, tarea_titulo: res.data.titulo, accion: 'editada', usuario_id: state.perfil.id, detalle: 'Datos de la tarea modificados' });
+      registrarAuditoria('tarea_editada', 'Tarea "' + res.data.titulo + '" modificada', res.data.id);
       state.modalEditarTaskId = null;
       showToast('✏️ Tarea actualizada');
     }catch(err){
@@ -1241,6 +1246,7 @@
       var idx = state.tareas.findIndex(function(t){ return t.id === state.modalCierreTaskId; });
       if(idx !== -1) state.tareas[idx] = res.data;
       state.modalCierreTaskId = null;
+      registrarAuditoria('tarea_cerrada', 'Tarea "' + res.data.titulo + '" finalizada' + (materialesUsados.length ? ' · ' + materialesUsados.length + ' materiales' : ''), res.data.id);
       showToast('✔️ Tarea Finalizada' + (res.data.foto_despues_url ? ' (con foto)' : '') + (materialesUsados.length ? (' — ' + materialesUsados.length + ' materiales descontados') : ''));
     } catch(err) {
       showToast(err.message);
@@ -1388,9 +1394,11 @@
       var res = await sb.from('perfiles').update({rol: nuevoRol}).eq('id', id);
       if(res.error) throw res.error;
       var u = state.usuarios.find(function(x){return x.id===id;});
+      var nombreU = u ? u.nombre : id;
       if(u) u.rol = nuevoRol;
       render();
       showToast('Rol actualizado');
+      registrarAuditoria('usuario_rol_cambiado', 'Rol de ' + nombreU + ' cambiado a ' + nombreRol(nuevoRol), id);
     }catch(err){ showToast('Error: ' + err.message); }
   }
 
@@ -1402,6 +1410,7 @@
     try{
       await sb.from('perfiles').update({status: nuevo}).eq('id', id);
       u.status = nuevo; render();
+      registrarAuditoria('usuario_status_cambiado', u.nombre + ' marcado como ' + nuevo, id);
     }catch(err){ showToast('Error: ' + err.message); }
   }
 
@@ -1409,6 +1418,7 @@
     if(!confirm('¿Eliminar PERMANENTEMENTE la cuenta de ' + nombre + '? Esto no se puede deshacer.')) return;
     setBusy(true);
     try{
+      await registrarAuditoria('usuario_eliminado', 'Cuenta de ' + nombre + ' eliminada permanentemente', id);
       var s = await sb.auth.getSession();
       var res = await fetch(SUPABASE_URL + '/functions/v1/admin-delete-user', {
         method: 'POST',
@@ -1911,31 +1921,236 @@
       </div>';
   }
 
-  async function generarCopiaSeguridad(){
-    showToast('💾 Generando copia de seguridad...');
+  // ── AUDITORÍA ──
+  async function registrarAuditoria(accion, detalle, referenciaId){
     try{
-      var perfilesRes = await sb.from('perfiles').select('*');
-      var tareasRes = await sb.from('tareas').select('*');
-      var comentariosRes = await sb.from('comentarios_tarea').select('*');
-      var inventarioRes = await sb.from('inventario').select('*');
-      var notasRes = await sb.from('notas_bloc').select('*');
+      await sb.from('log_auditoria').insert({
+        usuario_id: state.perfil ? state.perfil.id : null,
+        usuario_nombre: state.perfil ? state.perfil.nombre : 'Sistema',
+        accion: accion,
+        detalle: detalle || '',
+        referencia_id: referenciaId || null,
+        ip_dispositivo: navigator.userAgent.slice(0, 120)
+      });
+    }catch(e){ /* silencioso: si la tabla no existe aún no interrumpir */ }
+  }
 
+  async function cargarLogAuditoria(){
+    try{
+      var res = await sb.from('log_auditoria').select('*').order('created_at', {ascending:false}).limit(200);
+      state.logAuditoria = (res.data && !res.error) ? res.data : [];
+    }catch(e){ state.logAuditoria = []; }
+  }
+
+  function renderAuditoria(){
+    var log = state.logAuditoria || [];
+    var iconoAccion = function(a){
+      if(a.indexOf('tarea_creada') !== -1) return '🆕';
+      if(a.indexOf('tarea_cerrada') !== -1) return '✅';
+      if(a.indexOf('tarea_borrada') !== -1) return '🗑';
+      if(a.indexOf('tarea_editada') !== -1) return '✏️';
+      if(a.indexOf('tarea_reabierta') !== -1) return '🔄';
+      if(a.indexOf('usuario_rol') !== -1) return '👤';
+      if(a.indexOf('usuario_status') !== -1) return '🔒';
+      if(a.indexOf('usuario_eliminado') !== -1) return '❌';
+      if(a.indexOf('backup') !== -1) return '💾';
+      if(a.indexOf('login') !== -1) return '🔑';
+      return '📋';
+    };
+    return '\
+      <div class="row" style="margin-bottom:14px;gap:8px;">\
+        <div style="flex:1;">\
+          <p class="eyebrow" style="margin:0;">Registro de auditoría</p>\
+          <p class="hint" style="margin:2px 0 0;">Últimas 200 acciones del sistema</p>\
+        </div>\
+        <button class="btn-ghost btn-sm" id="btn-backup-legal">💾 Copia legal</button>\
+        <button class="btn-ghost btn-sm" id="btn-refrescar-audit">↻</button>\
+      </div>\
+      ' + (log.length === 0 ? '<div class="empty">No hay registros aún.<br><span style="font-size:11px;">Los registros aparecerán aquí conforme se usen las funciones de la app.</span></div>' :
+      '<div class="ios-list">' + log.map(function(entry){
+        return '\
+          <div class="ios-row" style="flex-wrap:wrap;">\
+            <div style="font-size:20px;width:28px;text-align:center;">' + iconoAccion(entry.accion) + '</div>\
+            <div class="ios-row-main">\
+              <div class="ios-row-title" style="font-size:14px;">' + (entry.detalle || entry.accion) + '</div>\
+              <div class="ios-row-sub">' + (entry.usuario_nombre || '—') + ' · ' + formatFecha(entry.created_at) + '</div>\
+            </div>\
+          </div>';
+      }).join('') + '</div>') + '\
+      <p class="hint" style="margin-top:12px;text-align:center;font-size:11px;">Este registro es inmutable. Sirve como evidencia legal de las acciones realizadas en el sistema.</p>';
+  }
+
+  async function generarCopiaSeguridad(){
+    showToast('💾 Preparando copia legal completa...');
+    try{
+      // Cargar TODOS los datos
+      var [perfilesRes, tareasRes, comentariosRes, inventarioRes, notasRes, historialRes, documentosRes, puntosAguaRes, auditoriaRes] = await Promise.all([
+        sb.from('perfiles').select('*'),
+        sb.from('tareas').select('*'),
+        sb.from('comentarios_tarea').select('*'),
+        sb.from('inventario').select('*'),
+        sb.from('notas_bloc').select('*'),
+        sb.from('historial_cambios').select('*'),
+        sb.from('documentos_tarea').select('*'),
+        sb.from('puntos_agua').select('*'),
+        sb.from('log_auditoria').select('*').order('created_at', {ascending:false}).limit(5000)
+      ]);
+
+      var fechaBackup = new Date().toISOString();
+      var tareas = tareasRes.data || [];
+      var perfiles = perfilesRes.data || [];
+      var auditoria = auditoriaRes.data || [];
+
+      // ── 1. JSON COMPLETO ──
       var backup = {
-        generado_en: new Date().toISOString(),
-        brigada: BRIGADA_NOMBRE,
-        perfiles: perfilesRes.data || [],
-        tareas: tareasRes.data || [],
+        metadatos: {
+          generado_en: fechaBackup,
+          generado_por: state.perfil ? state.perfil.nombre : '—',
+          brigada: BRIGADA_NOMBRE,
+          ayuntamiento: 'Ayuntamiento de Sariñena',
+          version_app: APP_VERSION,
+          total_tareas: tareas.length,
+          total_usuarios: perfiles.length,
+          advertencia_legal: 'Documento generado automáticamente. No modificar. Válido como evidencia de gestión municipal.'
+        },
+        perfiles: perfiles,
+        tareas: tareas,
         comentarios_tarea: comentariosRes.data || [],
         inventario: inventarioRes.data || [],
-        notas_bloc: notasRes.data || []
+        notas_bloc: notasRes.data || [],
+        historial_cambios: historialRes.data || [],
+        documentos_tarea: documentosRes.data || [],
+        puntos_agua: puntosAguaRes.data || [],
+        log_auditoria: auditoria
       };
+      var jsonBlob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
 
-      var blob = new Blob([JSON.stringify(backup, null, 2)], {type: 'application/json'});
-      var link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'Copia_Seguridad_Brigada_' + new Date().toISOString().slice(0,10) + '.json';
-      link.click();
-      showToast('✅ Copia de seguridad descargada');
+      // ── 2. PDF INSTITUCIONAL LEGAL ──
+      var jsPDFlib = window.jspdf.jsPDF;
+      var doc = new jsPDFlib();
+      var pageH = doc.internal.pageSize.getHeight();
+      var pageW = doc.internal.pageSize.getWidth();
+
+      function addMembreteYPie(doc, paginaActual, totalPags, titulo){
+        // Membrete
+        doc.setFillColor(0, 122, 255);
+        doc.rect(0, 0, pageW, 28, 'F');
+        try{
+          var escudoImg = document.querySelector('.splash-escudo') || new Image();
+          if(!escudoImg.src){ escudoImg.src = ESCUDO_URI; }
+          var canvas = document.createElement('canvas');
+          canvas.width = 100; canvas.height = 100;
+          var ctx2d = canvas.getContext('2d');
+          ctx2d.drawImage(escudoImg, 0, 0, 100, 100);
+          doc.addImage(canvas.toDataURL('image/png'), 'PNG', 6, 2, 24, 24);
+        }catch(e2){}
+        doc.setTextColor(255,255,255);
+        doc.setFontSize(13); doc.setFont(undefined,'bold');
+        doc.text('Ayuntamiento de Sariñena', 36, 11);
+        doc.setFontSize(9); doc.setFont(undefined,'normal');
+        doc.text(BRIGADA_NOMBRE + ' — ' + titulo, 36, 18);
+        doc.setFontSize(8);
+        doc.text('Generado: ' + new Date(fechaBackup).toLocaleString('es-ES'), pageW-8, 24, {align:'right'});
+        // Pie
+        doc.setTextColor(150);
+        doc.setFontSize(8);
+        if(typeof paginaActual === 'number'){
+          doc.text('Ayuntamiento de Sariñena · Brigada Municipal · Pág. ' + paginaActual + ' de ' + totalPags, pageW/2, pageH-8, {align:'center'});
+          doc.setDrawColor(220); doc.line(10, pageH-12, pageW-10, pageH-12);
+        }
+        doc.setTextColor(0);
+      }
+
+      var y = 38;
+      // Portada
+      doc.setFontSize(18); doc.setFont(undefined,'bold');
+      doc.text('COPIA DE SEGURIDAD — EVIDENCIA LEGAL', pageW/2, y+10, {align:'center'}); y+=18;
+      doc.setFontSize(11); doc.setFont(undefined,'normal');
+      doc.text('Ayuntamiento de Sariñena · Brigada Municipal', pageW/2, y, {align:'center'}); y+=8;
+      doc.text('Fecha: ' + new Date(fechaBackup).toLocaleString('es-ES'), pageW/2, y, {align:'center'}); y+=8;
+      doc.text('Generado por: ' + (state.perfil ? state.perfil.nombre : '—'), pageW/2, y, {align:'center'}); y+=16;
+      doc.setFillColor(240,240,245); doc.rect(10, y, pageW-20, 28, 'F');
+      doc.setFontSize(9); doc.setTextColor(80);
+      var avisoTexto = doc.splitTextToSize('Este documento ha sido generado automáticamente por el sistema de gestión de la Brigada Municipal del Ayuntamiento de Sariñena. Contiene un resumen de las tareas realizadas y el registro de auditoría del sistema. No ha sido modificado manualmente. Puede ser utilizado como evidencia de la actividad municipal conforme a la normativa de transparencia y procedimiento administrativo.', pageW-28);
+      doc.text(avisoTexto, 15, y+7); y += 36; doc.setTextColor(0);
+
+      // Resumen estadístico
+      var pendientes = tareas.filter(function(t){return t.status==='pendiente' && !t.eliminado_en;}).length;
+      var hechas = tareas.filter(function(t){return t.status==='hecho' && !t.eliminado_en;}).length;
+      var urgentes = tareas.filter(function(t){return t.urgencia && t.status==='pendiente' && !t.eliminado_en;}).length;
+      doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.text('Resumen estadístico', 10, y); y+=8;
+      doc.setFontSize(10); doc.setFont(undefined,'normal');
+      doc.text('· Total tareas: ' + tareas.filter(function(t){return !t.eliminado_en;}).length + '   Pendientes: ' + pendientes + '   Completadas: ' + hechas + '   Urgentes: ' + urgentes, 14, y); y+=6;
+      doc.text('· Total usuarios: ' + perfiles.length + '   Entradas en auditoría: ' + auditoria.length, 14, y); y+=14;
+
+      // Tabla tareas (resumen)
+      doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.text('Listado de tareas', 10, y); y+=8;
+      tareas.filter(function(t){return !t.eliminado_en;}).forEach(function(t){
+        if(y > pageH-35){ doc.addPage(); y=34; }
+        doc.setFontSize(9); doc.setFont(undefined,'bold');
+        doc.text((t.status==='hecho'?'[OK] ':'[PEND] ') + (t.titulo||'').slice(0,65), 10, y); y+=5;
+        doc.setFont(undefined,'normal'); doc.setFontSize(8);
+        doc.text('Asignado: '+nombreDe(t.assigned_to)+'  |  Categoría: '+(t.categoria||'General')+'  |  Creada: '+formatFecha(t.created_at)+(t.cerrado_en?'  |  Cerrada: '+formatFecha(t.cerrado_en):''), 14, y); y+=5;
+        doc.setDrawColor(230); doc.line(10, y, pageW-10, y); y+=3;
+      });
+
+      // Log auditoría
+      if(y > pageH-50){ doc.addPage(); y=34; }
+      y+=8; doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.text('Registro de auditoría (últimas 200 acciones)', 10, y); y+=8;
+      auditoria.slice(0,200).forEach(function(entry){
+        if(y > pageH-25){ doc.addPage(); y=34; }
+        doc.setFontSize(8); doc.setFont(undefined,'normal');
+        var linea = formatFecha(entry.created_at) + '  |  ' + (entry.usuario_nombre||'—') + '  |  ' + (entry.detalle||entry.accion||'');
+        doc.text(doc.splitTextToSize(linea, pageW-22), 12, y); y+=5;
+      });
+
+      // Numeración de páginas
+      var totalPags = doc.getNumberOfPages();
+      for(var pg=1; pg<=totalPags; pg++){
+        doc.setPage(pg);
+        addMembreteYPie(doc, pg, totalPags, 'Copia de Seguridad Legal');
+      }
+      var pdfBlob = new Blob([doc.output('arraybuffer')], {type:'application/pdf'});
+
+      // ── 3. CSV TAREAS ──
+      var csvLineas = [['ID','Título','Categoría','Urgencia','Asignado a','Estado','Creada','Cerrada','Notas cierre','GPS'].join(';')];
+      tareas.forEach(function(t){
+        csvLineas.push([
+          t.id, '"'+(t.titulo||'').replace(/"/g,'""')+'"', t.categoria||'General',
+          t.urgencia?'URGENTE':'Normal', '"'+nombreDe(t.assigned_to)+'"',
+          t.status, formatFecha(t.created_at), t.cerrado_en?formatFecha(t.cerrado_en):'',
+          '"'+(t.notas_cierre||'').replace(/"/g,'""')+'"', t.ubicacion_gps||''
+        ].join(';'));
+      });
+      var csvBlob = new Blob(['﻿'+csvLineas.join('\n')], {type:'text/csv;charset=utf-8'});
+
+      // ── 4. CSV AUDITORÍA ──
+      var csvAuditLineas = [['Fecha','Usuario','Acción','Detalle','Referencia'].join(';')];
+      auditoria.forEach(function(e){
+        csvAuditLineas.push([
+          formatFecha(e.created_at), '"'+(e.usuario_nombre||'').replace(/"/g,'""')+'"',
+          e.accion||'', '"'+(e.detalle||'').replace(/"/g,'""')+'"', e.referencia_id||''
+        ].join(';'));
+      });
+      var csvAuditBlob = new Blob(['﻿'+csvAuditLineas.join('\n')], {type:'text/csv;charset=utf-8'});
+
+      // Descargar todos los archivos
+      var fecha = new Date().toISOString().slice(0,10);
+      function descargar(blob, nombre){
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = nombre;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      }
+      descargar(jsonBlob,    'Backup_Brigada_' + fecha + '_COMPLETO.json');
+      setTimeout(function(){ descargar(pdfBlob,    'Backup_Brigada_' + fecha + '_INFORME.pdf'); }, 500);
+      setTimeout(function(){ descargar(csvBlob,    'Backup_Brigada_' + fecha + '_Tareas.csv'); }, 1000);
+      setTimeout(function(){ descargar(csvAuditBlob,'Backup_Brigada_' + fecha + '_Auditoria.csv'); }, 1500);
+
+      // Registrar que se hizo el backup
+      await registrarAuditoria('backup_generado', 'Copia de seguridad legal descargada por ' + (state.perfil ? state.perfil.nombre : '—'), null);
+      showToast('✅ 4 archivos descargados: JSON · PDF · CSV tareas · CSV auditoría');
     }catch(err){
       showToast('⚠️ Error: ' + err.message);
     }
@@ -1946,7 +2161,7 @@
     var htmlContent = '';
     if(tab === 'tareas'){ htmlContent = tareasTabContent(true); }
     else if(tab === 'usuarios'){
-      htmlContent = '<button class="btn-ghost btn-full" id="btn-backup" style="margin-bottom:14px;">💾 Descargar copia de seguridad completa</button><div class="ios-list">' + state.usuarios.map(function(u){
+      htmlContent = '<div class="ios-list">' + state.usuarios.map(function(u){
         var opciones = ['administrador','principal','secundario','lectura'].map(function(r){
           return '<option value="'+r+'" '+(u.rol===r?'selected':'')+'>'+nombreRol(r)+'</option>';
         }).join('');
@@ -1967,6 +2182,10 @@
     else if(tab === 'stats'){ htmlContent = renderEstadisticas(); }
     else if(tab === 'documentos'){ htmlContent = renderDocumentosGenerales(true); }
     else if(tab === 'aguas'){ htmlContent = renderAguas(); }
+    else if(tab === 'auditoria'){
+      if(!state.logAuditoria.length){ cargarLogAuditoria().then(render); }
+      htmlContent = renderAuditoria();
+    }
 
     return '\
       <div class="top-header"><div><p class="eyebrow">Admin</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
@@ -1981,6 +2200,7 @@
         <button class="ios-tab '+(tab==='inventario'?'active':'')+'" data-tab="inventario"><span class="tab-icon">' + iconoTab('stock') + '</span>Stock</button>\
         <button class="ios-tab '+(tab==='aguas'?'active':'')+'" data-tab="aguas"><span class="tab-icon">' + iconoTab('aguas') + '</span>Aguas</button>\
         <button class="ios-tab '+(tab==='documentos'?'active':'')+'" data-tab="documentos"><span class="tab-icon">' + iconoTab('documentos') + '</span>Docs</button>\
+        <button class="ios-tab '+(tab==='auditoria'?'active':'')+'" data-tab="auditoria"><span class="tab-icon">' + iconoTab('auditoria') + '</span>Auditoría</button>\
         <button class="ios-tab '+(tab==='bloc'?'active':'')+'" data-tab="bloc"><span class="tab-icon">' + iconoTab('bloc') + '</span>Bloc</button>\
       </div>';
   }
@@ -2179,6 +2399,7 @@
         var tarea = state.tareas.find(function(t){ return t.id === id; });
         await sb.from('tareas').update({ eliminado_en: new Date().toISOString(), eliminado_por: state.perfil.id }).eq('id', id);
         await sb.from('historial_cambios').insert({ tarea_id: id, tarea_titulo: tarea ? tarea.titulo : '', accion: 'eliminada', usuario_id: state.perfil.id, detalle: 'Enviada a la papelera' });
+        registrarAuditoria('tarea_borrada', 'Tarea "' + (tarea ? tarea.titulo : id) + '" enviada a la papelera', id);
         await cargarDatosGlobales(); render();
         showToast('🗑 Enviada a la papelera');
       }
@@ -2261,6 +2482,8 @@
     app.querySelectorAll('[data-toggle-llave]').forEach(function(n){ n.addEventListener('click', function(){ toggleEstadoLlave(n.getAttribute('data-toggle-llave')); }); });
     app.querySelectorAll('[data-borrar-punto-agua]').forEach(function(n){ n.addEventListener('click', function(){ eliminarPuntoAgua(n.getAttribute('data-borrar-punto-agua')); }); });
     var btnBackup = document.getElementById('btn-backup'); if(btnBackup) btnBackup.addEventListener('click', generarCopiaSeguridad);
+    var btnBackupLegal = document.getElementById('btn-backup-legal'); if(btnBackupLegal) btnBackupLegal.addEventListener('click', generarCopiaSeguridad);
+    var btnRefrescarAudit = document.getElementById('btn-refrescar-audit'); if(btnRefrescarAudit) btnRefrescarAudit.addEventListener('click', function(){ state.logAuditoria = []; cargarLogAuditoria().then(render); showToast('↻ Actualizando...'); });
     app.querySelectorAll('[data-restaurar-tarea]').forEach(function(n){ n.addEventListener('click', function(){ restaurarTarea(n.getAttribute('data-restaurar-tarea')); }); });
     app.querySelectorAll('[data-borrar-definitivo]').forEach(function(n){ n.addEventListener('click', function(){ eliminarTareaDefinitivo(n.getAttribute('data-borrar-definitivo')); }); });
 
