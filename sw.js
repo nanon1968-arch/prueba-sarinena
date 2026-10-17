@@ -1,16 +1,15 @@
-// Service worker mínimo de Brigada de Sariñena
-// Guarda en caché el cascarón de la app para que abra rápido y
-// cumple el requisito técnico para que el navegador ofrezca "Instalar app".
-// Los datos (tareas, usuarios, fotos) siempre se piden en vivo a Supabase,
-// así que hace falta conexión a internet para usar la app con normalidad.
+// Service worker de Brigada de Sariñena
+// VERSIÓN AUTOMÁTICA: usa timestamp de build para forzar actualización en iPhone/Safari
+// Los datos (tareas, usuarios, fotos) siempre se piden en vivo a Supabase.
 
-var CACHE_NAME = 'brigada-sarinena-v47';
+var CACHE_NAME = 'brigada-sarinena-' + '2026101731000000';
 var ARCHIVOS_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './escudo-sarinena.png'
 ];
 
 self.addEventListener('install', function(event){
@@ -19,6 +18,7 @@ self.addEventListener('install', function(event){
       return cache.addAll(ARCHIVOS_CACHE);
     })
   );
+  // Forzar activación inmediata sin esperar a que se cierren las pestañas anteriores
   self.skipWaiting();
 });
 
@@ -31,15 +31,27 @@ self.addEventListener('activate', function(event){
       );
     })
   );
+  // Tomar control de todas las pestañas abiertas inmediatamente
   self.clients.claim();
 });
 
+// CLAVE PARA iPHONE: siempre intentar red primero, caché solo si no hay conexión
 self.addEventListener('fetch', function(event){
   var url = event.request.url;
   var esCascaron = ARCHIVOS_CACHE.some(function(a){ return url.indexOf(a.replace('./','')) !== -1; });
   if(esCascaron){
     event.respondWith(
-      caches.match(event.request).then(function(resp){ return resp || fetch(event.request); })
+      fetch(event.request).then(function(respuesta){
+        // Actualizar la caché con la versión nueva
+        var copiaRespuesta = respuesta.clone();
+        caches.open(CACHE_NAME).then(function(cache){
+          cache.put(event.request, copiaRespuesta);
+        });
+        return respuesta;
+      }).catch(function(){
+        // Solo usar caché si no hay red (modo offline)
+        return caches.match(event.request);
+      })
     );
   }
 });
