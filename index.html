@@ -189,6 +189,58 @@
   /* Login mejorado */
   .login-escudo{width:80px;height:auto;margin-bottom:4px;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.13));}
   .login-institucion{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-soft);font-family:var(--font-mono);margin-top:2px;}
+
+  /* ── ANIMACIONES DE TRANSICIÓN ── */
+  @keyframes tabSlideInRight{from{opacity:0;transform:translateX(22px);}to{opacity:1;transform:translateX(0);}}
+  @keyframes tabSlideInLeft{from{opacity:0;transform:translateX(-22px);}to{opacity:1;transform:translateX(0);}}
+  @keyframes tabFadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+  .tab-anim-in{animation:tabFadeIn 0.22s cubic-bezier(0.34,1.56,0.64,1) both;}
+  .tab-anim-right{animation:tabSlideInRight 0.22s cubic-bezier(0.34,1.56,0.64,1) both;}
+  .tab-anim-left{animation:tabSlideInLeft 0.22s cubic-bezier(0.34,1.56,0.64,1) both;}
+
+  /* ── OFFLINE BANNER ── */
+  .offline-banner{
+    position:fixed;top:0;left:0;right:0;z-index:200;
+    background:var(--amber);color:#000;
+    font-size:12.5px;font-weight:600;font-family:var(--font-mono);
+    text-align:center;padding:8px 16px;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    animation:tabFadeIn 0.3s ease both;
+    box-shadow:0 2px 8px rgba(255,159,10,0.4);
+  }
+  .offline-banner .sync-count{background:rgba(0,0,0,0.15);border-radius:100px;padding:2px 8px;font-size:11px;}
+  .online-banner{
+    position:fixed;top:0;left:0;right:0;z-index:200;
+    background:var(--green);color:#fff;
+    font-size:12.5px;font-weight:600;font-family:var(--font-mono);
+    text-align:center;padding:8px 16px;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    animation:tabFadeIn 0.3s ease both;
+    box-shadow:0 2px 8px rgba(48,209,88,0.4);
+  }
+
+  /* ── DASHBOARD ── */
+  .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+  .dash-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow-card);display:flex;flex-direction:column;gap:4px;}
+  .dash-card.urgente{border-color:rgba(255,69,58,0.4);background:rgba(255,69,58,0.06);}
+  .dash-card.ok{border-color:rgba(48,209,88,0.3);background:rgba(48,209,88,0.05);}
+  .dash-card.amber{border-color:rgba(255,159,10,0.35);background:rgba(255,159,10,0.06);}
+  .dash-card.blue{border-color:rgba(10,132,255,0.25);background:rgba(10,132,255,0.06);}
+  .dash-num{font-family:var(--font-display);font-size:34px;font-weight:700;line-height:1;letter-spacing:-0.02em;}
+  .dash-label{font-size:11px;color:var(--ink-soft);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.04em;}
+  .dash-icon{font-size:22px;margin-bottom:2px;}
+  .dash-section{background:var(--surface);border:1px solid var(--border);border-radius:16px;margin-bottom:12px;overflow:hidden;}
+  .dash-section-title{font-size:12px;font-weight:700;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);padding:10px 14px 8px;border-bottom:1px solid var(--border);}
+  .dash-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .dash-row:last-child{border-bottom:none;}
+  .dash-row:active{background:var(--surface-alt);}
+  .dash-row-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .dash-row-dot.rojo{background:var(--red);}
+  .dash-row-dot.verde{background:var(--green);}
+  .dash-row-dot.naranja{background:var(--amber);}
+  .dash-row-text{flex:1;font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .dash-row-sub{font-size:11px;color:var(--ink-soft);}
+  .dash-offline-note{text-align:center;padding:8px;font-size:11px;color:var(--amber);font-family:var(--font-mono);background:rgba(255,159,10,0.08);border-radius:10px;margin-bottom:12px;}
 </style>
 </head>
 <body class="tema-claro">
@@ -213,7 +265,7 @@
   };
   function iconoTab(nombre){ return ICONOS_SVG[nombre] || ''; }
   var LOCALIDADES = ['Sariñena', 'La Cartuja de Monegros', 'San Juan del Flumen', 'Pallaruelo', 'Lastanosa', 'Lamasadera'];
-  var APP_VERSION = '3.3 · 17 oct 2026';
+  var APP_VERSION = '3.5 · 23 oct 2026';
   var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_WIsoROQk7m6rQVcdgB7wRw_1nOFTlfD';
   var FOTOS_BUCKET = 'tareas-fotos';
@@ -255,7 +307,14 @@
     modalCierreTaskId: null,
     modalEditarTaskId: null,
     tempGps: '',
-    lightboxUrl: null
+    lightboxUrl: null,
+    // Offline / sync
+    isOffline: false,
+    colaOffline: [],          // operaciones pendientes de sincronizar
+    mostrandoOnline: false,
+    // Transiciones de tab
+    tabAnterior: null,
+    tabAnimDir: 'in'          // 'in' | 'right' | 'left'
   };
 
   function aplicarTemaGuardado(){
@@ -305,6 +364,262 @@
   }
   function setBusy(v){ state.busy = v; render(); }
   function genId(prefix){ return (prefix||'x') + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  // ─────────────────────────────────────────────────
+  // OFFLINE / COLA DE SINCRONIZACIÓN
+  // ─────────────────────────────────────────────────
+
+  var COLA_KEY = 'brigada_cola_offline';
+
+  function cargarColaGuardada(){
+    try{
+      var raw = localStorage.getItem(COLA_KEY);
+      state.colaOffline = raw ? JSON.parse(raw) : [];
+    }catch(e){ state.colaOffline = []; }
+  }
+
+  function guardarCola(){
+    try{ localStorage.setItem(COLA_KEY, JSON.stringify(state.colaOffline)); }catch(e){}
+  }
+
+  function encolarOperacion(tipo, datos){
+    var op = { id: genId('op'), tipo: tipo, datos: datos, timestamp: new Date().toISOString() };
+    state.colaOffline.push(op);
+    guardarCola();
+    showToast('📥 Guardado localmente — se sincronizará al volver la cobertura');
+    render();
+    return op.id;
+  }
+
+  async function sincronizarCola(){
+    if(!state.colaOffline || state.colaOffline.length === 0) return;
+    var ops = state.colaOffline.slice(); // copia para no mutar mientras iteramos
+    var errores = [];
+    for(var i=0; i<ops.length; i++){
+      var op = ops[i];
+      try{
+        if(op.tipo === 'cerrar_tarea'){
+          var d = op.datos;
+          var updates = { status: 'hecho', notas_cierre: d.notas_cierre, cerrado_por: d.cerrado_por, cerrado_en: d.cerrado_en };
+          if(d.foto_despues_url) updates.foto_despues_url = d.foto_despues_url;
+          if(d.material_usado) updates.material_usado = d.material_usado;
+          var res = await sb.from('tareas').update(updates).eq('id', d.tarea_id);
+          if(res.error) throw res.error;
+          // Actualizar en state
+          var idx = state.tareas.findIndex(function(t){ return t.id === d.tarea_id; });
+          if(idx !== -1){ Object.assign(state.tareas[idx], updates); }
+        } else if(op.tipo === 'apunte_bloc'){
+          var res2 = await sb.from('notas_bloc').insert(op.datos).select().single();
+          if(res2.error) throw res2.error;
+          state.apuntesBloc.push(res2.data);
+          state.apuntesBloc.sort(function(a,b){ return new Date(b.created_at)-new Date(a.created_at); });
+        } else if(op.tipo === 'comentario'){
+          var res3 = await sb.from('comentarios_tarea').insert(op.datos).select().single();
+          if(res3.error) throw res3.error;
+          state.comentarios.push(res3.data);
+        } else if(op.tipo === 'toggle_inventario'){
+          var res4 = await sb.from('inventario').update({cantidad: op.datos.cantidad}).eq('id', op.datos.id);
+          if(res4.error) throw res4.error;
+        }
+        // Marcar completada: quitar de la cola
+        state.colaOffline = state.colaOffline.filter(function(x){ return x.id !== op.id; });
+      }catch(e){
+        errores.push(op.tipo);
+      }
+    }
+    guardarCola();
+    if(errores.length === 0){
+      showToast('✅ ' + ops.length + ' operación' + (ops.length > 1 ? 'es' : '') + ' sincronizada' + (ops.length > 1 ? 's' : '') + ' con el servidor');
+    } else {
+      showToast('⚠️ Sincronizadas ' + (ops.length - errores.length) + '/' + ops.length + '. Reintenta en un momento.');
+    }
+    render();
+  }
+
+  function detectarOffline(){
+    state.isOffline = !navigator.onLine;
+    cargarColaGuardada();
+    window.addEventListener('online', function(){
+      state.isOffline = false;
+      state.mostrandoOnline = true;
+      render();
+      // Sincronizar cola pendiente
+      sincronizarCola().then(function(){
+        // También recargar datos frescos del servidor
+        if(state.perfil){
+          cargarDatosGlobales().then(function(){ cargarUsuarios().then(render); });
+        }
+      });
+      setTimeout(function(){ state.mostrandoOnline = false; render(); }, 3500);
+    });
+    window.addEventListener('offline', function(){
+      state.isOffline = true;
+      render();
+    });
+  }
+  detectarOffline();
+
+  // ─────────────────────────────────────────────────
+  // DASHBOARD DE INICIO
+  // ─────────────────────────────────────────────────
+
+  var TAB_ORDER_ADMIN = ['dashboard','tareas','usuarios','stats','inventario','aguas','documentos','auditoria','bloc'];
+  var TAB_ORDER_PRINCIPAL = ['dashboard','tareas','usuarios','stats','inventario','aguas','documentos','bloc'];
+  var TAB_ORDER_SECUNDARIO = ['dashboard','tareas','propias','aguas','inventario','documentos','bloc'];
+
+  function tabAnimDir(tabAnterior, tabNuevo, orden){
+    if(!tabAnterior || tabAnterior === tabNuevo) return 'in';
+    var idxA = orden.indexOf(tabAnterior);
+    var idxN = orden.indexOf(tabNuevo);
+    if(idxA === -1 || idxN === -1) return 'in';
+    return idxN > idxA ? 'right' : 'left';
+  }
+
+  function cambiarTab(nuevoTab, esPrincipal){
+    var orden = esPrincipal
+      ? (state.perfil && state.perfil.rol === 'administrador' ? TAB_ORDER_ADMIN : TAB_ORDER_PRINCIPAL)
+      : TAB_ORDER_SECUNDARIO;
+    var anterior = esPrincipal ? state.principalTab : state.secondaryTab;
+    state.tabAnimDir = tabAnimDir(anterior, nuevoTab, orden);
+    if(esPrincipal){
+      state.tabAnterior = state.principalTab;
+      state.principalTab = nuevoTab;
+    } else {
+      state.tabAnterior = state.secondaryTab;
+      state.secondaryTab = nuevoTab;
+    }
+    render();
+  }
+
+  function renderDashboard(){
+    var tareas = state.tareas.filter(function(t){ return !t.eliminado_en; });
+    var pendientes = tareas.filter(function(t){ return t.status === 'pendiente'; });
+    var urgentes = pendientes.filter(function(t){ return t.urgencia; });
+    var hechasHoy = tareas.filter(function(t){
+      if(t.status !== 'hecho' || !t.cerrado_en) return false;
+      var d = new Date(t.cerrado_en);
+      var hoy = new Date();
+      return d.toDateString() === hoy.toDateString();
+    });
+    var disponibles = state.usuarios.filter(function(u){
+      return (u.rol === 'secundario') && u.status === 'activo' && u.disponible;
+    });
+    var stockBajo = state.inventario.filter(function(i){ return i.cantidad !== null && i.cantidad < 3; });
+
+    // Última actividad (historial + tareas cerradas hoy)
+    var ultimaAcc = state.historial && state.historial.length > 0 ? state.historial[0] : null;
+
+    var pendientesUrgentesHtml = urgentes.slice(0,4).map(function(t){
+      return '<div class="dash-row" data-tab="tareas" style="cursor:pointer;"><span class="dash-row-dot rojo"></span><div class="ios-row-main"><div class="dash-row-text">'+t.titulo+'</div><div class="dash-row-sub">'+nombreDe(t.assigned_to)+'</div></div></div>';
+    }).join('');
+    if(!pendientesUrgentesHtml && urgentes.length === 0){
+      pendientesUrgentesHtml = '<div class="dash-row"><span class="dash-row-dot verde"></span><span class="dash-row-text" style="color:var(--ink-soft);">Sin urgentes 🎉</span></div>';
+    }
+
+    var stockBajoHtml = stockBajo.slice(0,4).map(function(i){
+      return '<div class="dash-row"><span class="dash-row-dot '+(i.cantidad===0?'rojo':'naranja')+'"></span><div class="ios-row-main"><div class="dash-row-text">'+i.articulo+'</div><div class="dash-row-sub">'+(i.localidad||'—')+' · '+i.cantidad+' ud.</div></div></div>';
+    }).join('');
+    if(!stockBajoHtml){
+      stockBajoHtml = '<div class="dash-row"><span class="dash-row-dot verde"></span><span class="dash-row-text" style="color:var(--ink-soft);">Stock correcto</span></div>';
+    }
+
+    var dispHtml = disponibles.length === 0
+      ? '<div class="dash-row"><span class="dash-row-dot naranja"></span><span class="dash-row-text" style="color:var(--ink-soft);">Ninguno disponible hoy</span></div>'
+      : disponibles.slice(0,5).map(function(u){
+          var tareasU = pendientes.filter(function(t){ return t.assigned_to === u.id; }).length;
+          return '<div class="dash-row"><span class="dash-row-dot verde"></span><div class="ios-row-main"><div class="dash-row-text">'+u.nombre+'</div><div class="dash-row-sub">'+tareasU+' tarea'+(tareasU!==1?'s':'')+' pendiente'+(tareasU!==1?'s':'')+'</div></div></div>';
+        }).join('');
+
+    var ultimaActividadHtml = '';
+    if(ultimaAcc){
+      ultimaActividadHtml = '<div class="dash-section"><div class="dash-section-title">Última actividad</div><div class="dash-row"><div class="ios-row-main"><div class="dash-row-text">'+(ultimaAcc.tarea_titulo||ultimaAcc.detalle||'—')+'</div><div class="dash-row-sub">'+(ultimaAcc.accion||'')+(ultimaAcc.usuario_id?' · '+nombreDe(ultimaAcc.usuario_id):'')+(ultimaAcc.created_at?' · '+formatFecha(ultimaAcc.created_at):'')+'</div></div></div></div>';
+    }
+
+    var offlineNote = state.isOffline && state.colaOffline && state.colaOffline.length > 0
+      ? '<div class="dash-offline-note">📴 Modo sin cobertura — '+state.colaOffline.length+' operación'+(state.colaOffline.length>1?'es':'')+' en cola</div>'
+      : (state.isOffline ? '<div class="dash-offline-note">📴 Sin cobertura — los datos son del último acceso</div>' : '');
+
+    return offlineNote +
+      '<div class="dash-grid">' +
+        '<div class="dash-card '+(urgentes.length>0?'urgente':'ok')+'">' +
+          '<div class="dash-icon">'+(urgentes.length>0?'🚨':'✅')+'</div>' +
+          '<div class="dash-num" style="color:'+(urgentes.length>0?'var(--red)':'var(--green)')+'">'+urgentes.length+'</div>' +
+          '<div class="dash-label">Urgentes</div>' +
+        '</div>' +
+        '<div class="dash-card '+(pendientes.length>5?'amber':'blue')+'">' +
+          '<div class="dash-icon">📋</div>' +
+          '<div class="dash-num" style="color:var(--primary)">'+pendientes.length+'</div>' +
+          '<div class="dash-label">Pendientes</div>' +
+        '</div>' +
+        '<div class="dash-card '+(hechasHoy.length>0?'ok':'blue')+'">' +
+          '<div class="dash-icon">🏁</div>' +
+          '<div class="dash-num" style="color:var(--green)">'+hechasHoy.length+'</div>' +
+          '<div class="dash-label">Cerradas hoy</div>' +
+        '</div>' +
+        '<div class="dash-card '+(disponibles.length>0?'ok':'amber')+'">' +
+          '<div class="dash-icon">👷</div>' +
+          '<div class="dash-num" style="color:var(--primary)">'+disponibles.length+'</div>' +
+          '<div class="dash-label">Disponibles</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="dash-section">' +
+        '<div class="dash-section-title">⚡ Urgentes</div>' +
+        pendientesUrgentesHtml +
+      '</div>' +
+      '<div class="dash-section">' +
+        '<div class="dash-section-title">👷 Equipo disponible</div>' +
+        dispHtml +
+      '</div>' +
+      '<div class="dash-section">' +
+        '<div class="dash-section-title">📦 Stock bajo (< 3 ud.)</div>' +
+        stockBajoHtml +
+      '</div>' +
+      ultimaActividadHtml;
+  }
+
+  function renderDashboardSecundario(){
+    var u = state.perfil;
+    if(!u) return '';
+    var misTareas = state.tareas.filter(function(t){ return t.assigned_to === u.id && !t.eliminado_en; });
+    var misPendientes = misTareas.filter(function(t){ return t.status === 'pendiente'; });
+    var misUrgentes = misPendientes.filter(function(t){ return t.urgencia; });
+    var misHechas = misTareas.filter(function(t){ return t.status === 'hecho'; });
+
+    var stockBajo = state.inventario.filter(function(i){ return i.cantidad !== null && i.cantidad < 3; });
+
+    var offlineNote = state.isOffline && state.colaOffline && state.colaOffline.length > 0
+      ? '<div class="dash-offline-note">📴 Modo sin cobertura — '+state.colaOffline.length+' operación'+(state.colaOffline.length>1?'es':'')+' en cola</div>'
+      : (state.isOffline ? '<div class="dash-offline-note">📴 Sin cobertura — datos del último acceso</div>' : '');
+
+    var tareasHtml = misPendientes.slice(0,5).map(function(t){
+      return '<div class="dash-row" data-action-complete="'+t.id+'"><span class="dash-row-dot '+(t.urgencia?'rojo':'naranja')+'"></span><div class="ios-row-main"><div class="dash-row-text">'+t.titulo+'</div><div class="dash-row-sub">'+(t.urgencia?'🚨 Urgente · ':'')+formatFecha(t.created_at)+'</div></div></div>';
+    }).join('') || '<div class="dash-row"><span class="dash-row-dot verde"></span><span class="dash-row-text" style="color:var(--ink-soft);">Sin tareas pendientes 🎉</span></div>';
+
+    return offlineNote +
+      '<div class="dash-grid">' +
+        '<div class="dash-card '+(misUrgentes.length>0?'urgente':'ok')+'">' +
+          '<div class="dash-icon">'+(misUrgentes.length>0?'🚨':'✅')+'</div>' +
+          '<div class="dash-num" style="color:'+(misUrgentes.length>0?'var(--red)':'var(--green)')+'">'+misUrgentes.length+'</div>' +
+          '<div class="dash-label">Urgentes</div>' +
+        '</div>' +
+        '<div class="dash-card blue">' +
+          '<div class="dash-icon">📋</div>' +
+          '<div class="dash-num" style="color:var(--primary)">'+misPendientes.length+'</div>' +
+          '<div class="dash-label">Pendientes</div>' +
+        '</div>' +
+        '<div class="dash-card ok">' +
+          '<div class="dash-icon">🏁</div>' +
+          '<div class="dash-num" style="color:var(--green)">'+misHechas.length+'</div>' +
+          '<div class="dash-label">Completadas</div>' +
+        '</div>' +
+        '<div class="dash-card '+(stockBajo.length>0?'amber':'ok')+'">' +
+          '<div class="dash-icon">📦</div>' +
+          '<div class="dash-num" style="color:'+(stockBajo.length>0?'var(--amber)':'var(--green)')+'">'+stockBajo.length+'</div>' +
+          '<div class="dash-label">Stock bajo</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="dash-section"><div class="dash-section-title">Mis tareas pendientes</div>' + tareasHtml + '</div>';
+  }
 
   // --- LÓGICA DE DATOS ---
   async function cargarDatosGlobales() {
@@ -933,6 +1248,12 @@
     var input = e.target.querySelector('input[name="texto"]');
     var txt = input.value.trim();
     if(!txt) return;
+    var datosComentario = { task_id: taskId, user_id: state.perfil.id, texto: txt, created_at: new Date().toISOString(), id: genId() };
+    if(state.isOffline){
+      encolarOperacion('comentario', datosComentario);
+      state.comentarios.push(datosComentario);
+      input.value = ''; render(); return;
+    }
     try{
       var res = await sb.from('comentarios_tarea').insert({ task_id: taskId, user_id: state.perfil.id, texto: txt }).select().single();
       if(res.error) throw res.error;
@@ -1221,6 +1542,13 @@
         }
       });
 
+      if(state.isOffline){
+        var datosCierre = { tarea_id: state.modalCierreTaskId, notas_cierre: fd.get('notasCierre'), materiales_usados: materialesUsados, cerrado_por: state.perfil.id, cerrado_en: new Date().toISOString() };
+        encolarOperacion('cerrar_tarea', datosCierre);
+        var idxOff = state.tareas.findIndex(function(t){ return t.id === state.modalCierreTaskId; });
+        if(idxOff !== -1){ state.tareas[idxOff].status = 'hecho'; state.tareas[idxOff].notas_cierre = datosCierre.notas_cierre; }
+        state.modalCierreTaskId = null; state.busy = false; render(); return;
+      }
       var res = await sb.from('tareas').update({
         status: 'hecho', notas_cierre: fd.get('notasCierre'), foto_despues_url: fotoUrl,
         cerrado_en: new Date().toISOString(), cerrado_por: state.perfil.id,
@@ -1270,6 +1598,7 @@
     if(!item) return;
     var newQty = item.cantidad + qtyChange;
     if(newQty < 0) newQty = 0;
+    if(state.isOffline){ encolarOperacion('toggle_inventario', {id: id, cantidad: newQty}); item.cantidad = newQty; render(); return; }
     try{ await sb.from('inventario').update({cantidad: newQty}).eq('id', id); item.cantidad = newQty; render(); }
     catch(err){ showToast('Error'); }
   }
@@ -1356,6 +1685,15 @@
       if(gastaHoras && fechaGasto){
         // Al mediodía para evitar problemas de zona horaria con el día
         datosApunte.created_at = new Date(fechaGasto + 'T12:00:00').toISOString();
+      }
+      if(state.isOffline){
+        datosApunte.id = genId(); datosApunte.created_at = datosApunte.created_at || new Date().toISOString();
+        encolarOperacion('apunte_bloc', datosApunte);
+        state.apuntesBloc.push(datosApunte);
+        state.apuntesBloc.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
+        input.value = ''; render();
+        showToast('📝 Apunte guardado (sin conexión)');
+        return;
       }
       var res = await sb.from('notas_bloc').insert(datosApunte).select().single();
       if(res.error) throw res.error;
@@ -1890,8 +2228,11 @@
 
   function screenPrincipalHome(){
     var tab = state.principalTab;
+    if(!tab || tab === '') tab = state.principalTab = 'dashboard';
     var htmlContent = '';
-    if(tab === 'tareas'){ htmlContent = tareasTabContent(true); }
+    var animClass = 'tab-anim-' + (state.tabAnimDir || 'in');
+    if(tab === 'dashboard'){ htmlContent = renderDashboard(); }
+    else if(tab === 'tareas'){ htmlContent = tareasTabContent(true); }
     else if(tab === 'usuarios'){
       var mem = state.usuarios.filter(function(u){ return u.rol === 'secundario'; });
       htmlContent = '<div class="ios-list">' + (mem.length ? mem.map(function(u){
@@ -1908,9 +2249,10 @@
       <div class="top-header"><div><p class="eyebrow">Jefatura</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll">\
         <div class="row" style="margin-bottom:14px;">' + botonNotificacionesHtml('btn-ghost btn-sm', 'flex:1;') + '<button class="btn-ghost btn-sm" style="flex:1;" id="btn-tema">🌗 Tema</button></div>\
-        ' + htmlContent + '\
+        <div class="' + animClass + '">' + htmlContent + '</div>\
       </div>\
       <div class="ios-tabbar">\
+        <button class="ios-tab '+(tab==='dashboard'?'active':'')+'" data-tab="dashboard"><span class="tab-icon">🏠</span>Inicio</button>\
         <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Órdenes</button>\
         <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">' + iconoTab('equipo') + '</span>Equipo</button>\
         <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
@@ -2179,8 +2521,11 @@
 
   function screenAdminHome(){
     var tab = state.principalTab;
+    if(!tab || tab === '') tab = state.principalTab = 'dashboard';
+    var animClass = 'tab-anim-' + (state.tabAnimDir || 'in');
     var htmlContent = '';
-    if(tab === 'tareas'){ htmlContent = tareasTabContent(true); }
+    if(tab === 'dashboard'){ htmlContent = renderDashboard(); }
+    else if(tab === 'tareas'){ htmlContent = tareasTabContent(true); }
     else if(tab === 'usuarios'){
       htmlContent = '<div class="ios-list">' + state.usuarios.map(function(u){
         var opciones = ['administrador','principal','secundario','lectura'].map(function(r){
@@ -2212,9 +2557,10 @@
       <div class="top-header"><div><p class="eyebrow">Admin</p><div class="company-name">' + BRIGADA_NOMBRE + '</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
       <div class="screen-scroll">\
         <div class="row" style="margin-bottom:14px;">' + botonNotificacionesHtml('btn-ghost btn-sm', 'flex:1;') + '<button class="btn-ghost btn-sm" style="flex:1;" id="btn-tema">🌗 Tema</button></div>\
-        ' + htmlContent + '\
+        <div class="' + animClass + '">' + htmlContent + '</div>\
       </div>\
       <div class="ios-tabbar">\
+        <button class="ios-tab '+(tab==='dashboard'?'active':'')+'" data-tab="dashboard"><span class="tab-icon">🏠</span>Inicio</button>\
         <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-tab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Órdenes</button>\
         <button class="ios-tab '+(tab==='usuarios'?'active':'')+'" data-tab="usuarios"><span class="tab-icon">' + iconoTab('usuarios') + '</span>Usuarios</button>\
         <button class="ios-tab '+(tab==='stats'?'active':'')+'" data-tab="stats"><span class="tab-icon">' + iconoTab('stats') + '</span>Stats</button>\
@@ -2269,10 +2615,13 @@
   function screenSecondaryHome(){
     var u = state.perfil;
     var tab = state.secondaryTab;
+    if(!tab || tab === '') tab = state.secondaryTab = 'dashboard';
+    var animClass = 'tab-anim-' + (state.tabAnimDir || 'in');
     var tasks = filtrarTareas(state.tareas.filter(function(t){ return t.assigned_to === u.id; }));
     if(tab === 'tareas'){ marcarVistasSiHaceFalta(tasks.filter(function(t){ return t.status === 'pendiente'; })); }
     var htmlContent = '';
-    if(tab === 'tareas'){
+    if(tab === 'dashboard'){ htmlContent = renderDashboardSecundario(); }
+    else if(tab === 'tareas'){
       htmlContent = badgeCard(u) + '<div style="margin:12px 0;">' + botonNotificacionesHtml('btn-ghost btn-full') + '<button class="btn-ghost btn-full" id="btn-tema" style="margin-top:8px;">🌗 Cambiar tema</button></div>' + renderFilterBar() + '<div class="grid">' + (tasks.length ? conSeparadoresDeFecha(tasks, 'created_at', function(t){return taskCard(t,false);}) : '<div class="empty">Sin tareas asignadas.</div>') + '</div>';
     } else if(tab === 'inventario'){ htmlContent = renderInventarioSection(false); }
     else if(tab === 'bloc'){ htmlContent = renderBlocSection(); }
@@ -2282,8 +2631,9 @@
 
     return '\
       <div class="top-header"><div><p class="eyebrow">' + BRIGADA_NOMBRE + '</p><div class="company-name">Mi perfil</div></div><div class="row" style="gap:6px;"><button class="btn-ghost btn-sm" id="btn-mi-cuenta">⚙️</button><button class="logout-link" data-go="logout">Salir</button></div></div>\
-      <div class="screen-scroll">' + htmlContent + '</div>\
+      <div class="screen-scroll"><div class="' + animClass + '">' + htmlContent + '</div></div>\
       <div class="ios-tabbar">\
+        <button class="ios-tab '+(tab==='dashboard'?'active':'')+'" data-sectab="dashboard"><span class="tab-icon">🏠</span>Inicio</button>\
         <button class="ios-tab '+(tab==='tareas'?'active':'')+'" data-sectab="tareas"><span class="tab-icon">' + iconoTab('tareas') + '</span>Tareas</button>\
         <button class="ios-tab '+(tab==='propias'?'active':'')+'" data-sectab="propias"><span class="tab-icon">' + iconoTab('propias') + '</span>Propias</button>\
         <button class="ios-tab '+(tab==='aguas'?'active':'')+'" data-sectab="aguas"><span class="tab-icon">' + iconoTab('aguas') + '</span>Aguas</button>\
@@ -2383,6 +2733,8 @@
     if(state.lightboxUrl){
       html += '<div class="lightbox-overlay" id="lightbox-overlay"><button class="lightbox-close" id="lightbox-close">✕</button><img src="'+state.lightboxUrl+'"></div>';
     }
+    if(state.isOffline) html += '<div class="offline-banner">📵 Sin cobertura — los cambios se guardarán y sincronizarán al recuperar la conexión' + (state.colaOffline.length ? ' ('+state.colaOffline.length+' pendiente'+(state.colaOffline.length>1?'s':'')+')' : '') + '</div>';
+    else if(state.mostrandoOnline) html += '<div class="online-banner">✅ Conexión restaurada — sincronizando datos…</div>';
     if(state.toast) html += '<div class="toast">' + state.toast + '</div>';
     app.innerHTML = html;
     wireEvents();
@@ -2391,8 +2743,8 @@
   function wireEvents(){
     var app = document.getElementById('app');
     app.querySelectorAll('[data-go]').forEach(function(n){ n.addEventListener('click', function(){ if(n.getAttribute('data-go')==='logout'){ logout(); } else { goTo(n.getAttribute('data-go')); } }); });
-    app.querySelectorAll('[data-tab]').forEach(function(n){ n.addEventListener('click', function(){ state.principalTab = n.getAttribute('data-tab'); render(); }); });
-    app.querySelectorAll('[data-sectab]').forEach(function(n){ n.addEventListener('click', function(){ state.secondaryTab = n.getAttribute('data-sectab'); render(); }); });
+    app.querySelectorAll('[data-tab]').forEach(function(n){ n.addEventListener('click', function(){ cambiarTab(n.getAttribute('data-tab'), true); }); });
+    app.querySelectorAll('[data-sectab]').forEach(function(n){ n.addEventListener('click', function(){ cambiarTab(n.getAttribute('data-sectab'), false); }); });
     app.querySelectorAll('[data-authtab]').forEach(function(n){ n.addEventListener('click', function(){ state.authTab = n.getAttribute('data-authtab'); state.error=''; render(); }); });
     app.querySelectorAll('[data-filter]').forEach(function(n){ n.addEventListener('click', function(){ state.filtroTareas = n.getAttribute('data-filter'); render(); }); });
     app.querySelectorAll('[data-fecha]').forEach(function(n){ n.addEventListener('click', function(){ state.filtroFecha = n.getAttribute('data-fecha'); render(); }); });
