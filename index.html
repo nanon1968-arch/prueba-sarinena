@@ -265,7 +265,7 @@
   };
   function iconoTab(nombre){ return ICONOS_SVG[nombre] || ''; }
   var LOCALIDADES = ['Sariñena', 'La Cartuja de Monegros', 'San Juan del Flumen', 'Pallaruelo', 'Lastanosa', 'Lamasadera'];
-  var APP_VERSION = '3.5 · 23 oct 2026';
+  var APP_VERSION = '3.6 · 29 oct 2026';
   var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_WIsoROQk7m6rQVcdgB7wRw_1nOFTlfD';
   var FOTOS_BUCKET = 'tareas-fotos';
@@ -1179,7 +1179,8 @@
   }
 
   function renderTareasPropias(){
-    var misEnvios = state.tareas.filter(function(t){ return t.created_by === state.perfil.id && t.assigned_to !== state.perfil.id; });
+    var misEnvios = filtrarTareas(state.tareas.filter(function(t){ return t.created_by === state.perfil.id && t.assigned_to !== state.perfil.id; }));
+    var totalEnvios = state.tareas.filter(function(t){ return t.created_by === state.perfil.id && t.assigned_to !== state.perfil.id; }).length;
     var lista = conSeparadoresDeFecha(misEnvios, 'created_at', function(t){ return taskCard(t, false); });
     return '\
       <div class="card stack" style="margin-bottom:14px;">\
@@ -1192,8 +1193,14 @@
           <button type="submit" class="btn-primary btn-full">Enviar a jefatura</button>\
         </form>\
       </div>\
-      <p class="eyebrow">Lo que has enviado (' + misEnvios.length + ')</p>\
-      <div class="grid">' + (misEnvios.length ? lista : '<div class="empty">Todavía no has enviado ninguna tarea a la jefatura.</div>') + '</div>';
+      <input type="search" id="buscador-tareas" placeholder="🔍 Buscar por título o descripción..." value="' + state.busquedaTareas.replace(/"/g,'&quot;') + '" style="margin-bottom:10px;">\
+      <div class="filter-bar" style="margin-bottom:8px;">\
+        <button class="filter-btn '+(state.filtroTareas==='pendiente'?'active':'')+'" data-filter="pendiente">⏳ Pendientes</button>\
+        <button class="filter-btn '+(state.filtroTareas==='hecho'?'active':'')+'" data-filter="hecho">✅ Hechas</button>\
+        <button class="filter-btn '+(state.filtroTareas==='todos'?'active':'')+'" data-filter="todos">📂 Todas</button>\
+      </div>\
+      <p class="eyebrow">Lo que has enviado (' + misEnvios.length + (misEnvios.length !== totalEnvios ? ' de ' + totalEnvios : '') + ')</p>\
+      <div class="grid">' + (misEnvios.length ? lista : '<div class="empty">' + (state.busquedaTareas ? 'Sin resultados para "' + state.busquedaTareas + '".' : 'Todavía no has enviado ninguna tarea a la jefatura.') + '</div>') + '</div>';
   }
 
   async function handleAddTask(e){
