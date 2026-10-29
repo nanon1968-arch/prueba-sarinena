@@ -265,7 +265,7 @@
   };
   function iconoTab(nombre){ return ICONOS_SVG[nombre] || ''; }
   var LOCALIDADES = ['Sariñena', 'La Cartuja de Monegros', 'San Juan del Flumen', 'Pallaruelo', 'Lastanosa', 'Lamasadera'];
-  var APP_VERSION = '3.6 · 29 oct 2026';
+  var APP_VERSION = '3.7 · 29 oct 2026';
   var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_WIsoROQk7m6rQVcdgB7wRw_1nOFTlfD';
   var FOTOS_BUCKET = 'tareas-fotos';
@@ -1361,29 +1361,33 @@
     var cerradas = llaves.filter(function(p){ return p.estado === 'cerrada'; });
 
     var listaHtml = '';
+    var esGestorAguas = !soloLectura && (soloLectura === undefined || soloLectura === null || state.perfil.rol === 'admin' || state.perfil.rol === 'principal');
+    var miId = state.perfil ? state.perfil.id : null;
     if(sub === 'llaves'){
       listaHtml = llaves.length ? llaves.map(function(p){
         var esCerrada = p.estado === 'cerrada';
+        var puedeBorrar = !soloLectura && (esGestorAguas || p.creado_por === miId);
         return '\
           <div class="ios-row" style="flex-wrap:wrap;">\
             <div class="ios-row-main">\
               <div class="ios-row-title">'+(esCerrada?'🔴':'🟢')+' '+p.nombre+'</div>\
-              <div class="ios-row-sub">'+(p.poblacion||'sin población')+(esCerrada ? (' · cerrada por '+nombreDe(p.cerrado_por)+' · '+formatFecha(p.cerrado_en)) : '')+'</div>\
+              <div class="ios-row-sub">'+(p.poblacion||'sin población')+(esCerrada ? (' · cerrada por '+nombreDe(p.cerrado_por)+' · '+formatFecha(p.cerrado_en)) : '')+(p.creado_por ? (' · añadida por '+nombreDe(p.creado_por)) : '')+'</div>\
               <a href="https://www.google.com/maps/dir/?api=1&destination='+p.latitud+','+p.longitud+'&travelmode=driving" target="_blank" class="gps-badge">📍 Cómo llegar</a>\
             </div>\
-            ' + (soloLectura ? '' : ('<button class="btn-ghost btn-sm" data-toggle-llave="'+p.id+'">'+(esCerrada ? '🟢 Abrir' : '🔴 Cerrar')+'</button><button class="btn-danger-ghost btn-sm" data-borrar-punto-agua="'+p.id+'">🗑</button>')) + '\
+            ' + (soloLectura ? '' : ('<button class="btn-ghost btn-sm" data-toggle-llave="'+p.id+'">'+(esCerrada ? '🟢 Abrir' : '🔴 Cerrar')+'</button>' + (puedeBorrar ? '<button class="btn-danger-ghost btn-sm" data-borrar-punto-agua="'+p.id+'">🗑</button>' : ''))) + '\
           </div>';
       }).join('') : '<div class="ios-row"><span class="empty">Todavía no hay llaves registradas.</span></div>';
     } else {
       listaHtml = programadores.length ? programadores.map(function(p){
+        var puedeBorrar = !soloLectura && (esGestorAguas || p.creado_por === miId);
         return '\
           <div class="ios-row" style="flex-wrap:wrap;">\
             <div class="ios-row-main">\
               <div class="ios-row-title">🌿 '+p.nombre+'</div>\
-              <div class="ios-row-sub">'+(p.poblacion||'sin población')+'</div>\
+              <div class="ios-row-sub">'+(p.poblacion||'sin población')+(p.creado_por ? (' · añadido por '+nombreDe(p.creado_por)) : '')+'</div>\
               <a href="https://www.google.com/maps/dir/?api=1&destination='+p.latitud+','+p.longitud+'&travelmode=driving" target="_blank" class="gps-badge">📍 Cómo llegar</a>\
             </div>\
-            ' + (soloLectura ? '' : '<button class="btn-danger-ghost btn-sm" data-borrar-punto-agua="'+p.id+'">🗑</button>') + '\
+            ' + (puedeBorrar ? '<button class="btn-danger-ghost btn-sm" data-borrar-punto-agua="'+p.id+'">🗑</button>' : '') + '\
           </div>';
       }).join('') : '<div class="ios-row"><span class="empty">Todavía no hay programadores registrados.</span></div>';
     }
