@@ -265,7 +265,7 @@
   };
   function iconoTab(nombre){ return ICONOS_SVG[nombre] || ''; }
   var LOCALIDADES = ['Sariñena', 'La Cartuja de Monegros', 'San Juan del Flumen', 'Pallaruelo', 'Lastanosa', 'Lamasadera'];
-  var APP_VERSION = '3.7 · 29 oct 2026';
+  var APP_VERSION = '3.8 · 5 nov 2026';
   var SUPABASE_URL = 'https://rqdfrqshgicladvcjoij.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_WIsoROQk7m6rQVcdgB7wRw_1nOFTlfD';
   var FOTOS_BUCKET = 'tareas-fotos';
@@ -1130,9 +1130,13 @@
     }catch(err){ showToast('Error: ' + err.message); }
   }
 
-  function logout(){
-    sb.auth.signOut();
-    location.reload();
+  async function logout(){
+    try{ await sb.auth.signOut(); }catch(e){}
+    state.perfil = null; state.screen = 'auth'; state.authTab = 'login';
+    state.tareas = []; state.usuarios = []; state.inventario = [];
+    state.historial = []; state.comentarios = []; state.documentos = [];
+    state.apuntesBloc = []; state.puntosAgua = [];
+    render();
   }
 
   async function handleAddTareaPropia(e){
